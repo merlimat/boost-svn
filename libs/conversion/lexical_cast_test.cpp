@@ -197,17 +197,18 @@ void test_conversion_to_int()
 
 void test_conversion_to_double()
 {
-    BOOST_CHECK_CLOSE(1.0, lexical_cast<double>('1'), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(1.0, lexical_cast<double>('1'), (std::numeric_limits<double>::epsilon()));
     BOOST_CHECK_THROW(lexical_cast<double>('A'), bad_lexical_cast);
-    BOOST_CHECK_CLOSE(1.0, lexical_cast<double>(1), (std::numeric_limits<double>::epsilon()));
-    BOOST_CHECK_CLOSE(1.23, lexical_cast<double>(1.23), (std::numeric_limits<double>::epsilon()));
-    BOOST_CHECK_CLOSE(1.234567890, 1.234567890, std::numeric_limits<double>::epsilon());
-    BOOST_CHECK_CLOSE(1.0, lexical_cast<double>(true), (std::numeric_limits<double>::epsilon()));
-    BOOST_CHECK_CLOSE(0.0, lexical_cast<double>(false), (std::numeric_limits<double>::epsilon()));
-    BOOST_CHECK_CLOSE(1.23, lexical_cast<double>("1.23"), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(1.0, lexical_cast<double>(1), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(1.23, lexical_cast<double>(1.23), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(1.234567890, lexical_cast<double>(1.234567890), std::numeric_limits<double>::epsilon());
+    BOOST_CHECK_CLOSE_FRACTION(1.234567890, lexical_cast<double>("1.234567890"), std::numeric_limits<double>::epsilon());
+    BOOST_CHECK_CLOSE_FRACTION(1.0, lexical_cast<double>(true), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(0.0, lexical_cast<double>(false), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(1.23, lexical_cast<double>("1.23"), (std::numeric_limits<double>::epsilon()));
     BOOST_CHECK_THROW(lexical_cast<double>(""), bad_lexical_cast);
     BOOST_CHECK_THROW(lexical_cast<double>("Test"), bad_lexical_cast);
-    BOOST_CHECK_CLOSE(1.23, lexical_cast<double>(std::string("1.23")), (std::numeric_limits<double>::epsilon()));
+    BOOST_CHECK_CLOSE_FRACTION(1.23, lexical_cast<double>(std::string("1.23")), (std::numeric_limits<double>::epsilon()));
     BOOST_CHECK_THROW(
         lexical_cast<double>(std::string("")), bad_lexical_cast);
     BOOST_CHECK_THROW(
@@ -919,17 +920,6 @@ void test_char_types_conversions()
 
     BOOST_CHECK(boost::lexical_cast<std::wstring>(wc_arr) == std::wstring(wc_arr));
     BOOST_CHECK(boost::lexical_cast<wchar_t>(wc_arr[0]) == wc_arr[0]);
-
-    // Following tests depend on realization of std::locale.
-    // All we need to know, is that this functions must compile
-    BOOST_CHECK(boost::lexical_cast<wchar_t>(c_arr[0]) == wc_arr[0]);
-    BOOST_CHECK(boost::lexical_cast<std::wstring>(c_arr) == std::wstring(wc_arr));
-
-    BOOST_CHECK(boost::lexical_cast<std::wstring>(sc_arr) != std::wstring(wc_arr) );
-    BOOST_CHECK(boost::lexical_cast<std::wstring>(uc_arr) != std::wstring(wc_arr) );
-
-    BOOST_CHECK_THROW(boost::lexical_cast<wchar_t>(uc_arr[0]), bad_lexical_cast);
-    BOOST_CHECK_THROW(boost::lexical_cast<wchar_t>(sc_arr[0]), bad_lexical_cast);
 
 #endif
 }
