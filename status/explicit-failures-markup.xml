@@ -632,6 +632,7 @@
                 <toolset name="gcc-4.1*"/>
                 <toolset name="gcc-4.2.0*"/>
                 <toolset name="gcc-mingw-3.4*"/>
+                <toolset name="gcc-mingw-4.*"/>
                 <toolset name="sun-5.7*"/>
                 <toolset name="sun-5.8*"/>
                 <toolset name="sun-5.9*"/>
@@ -640,18 +641,19 @@
                 <toolset name="msvc-9.0*"/>
                 <toolset name="msvc-10.0*"/>
                 <toolset name="msvc-7.1*"/>
+                <toolset name="vacpp-10.1"/>
                 <toolset name="acc"/>
                 <note author="Alexander Nasonov">
                     Conversion double-string-double may give a different value (or even throw) on many compilers
                 </note>
             </mark-failure>
         </test>
-        <test name="lexical_cast_vc8_bug_test">
+        <test name="lexical_cast_float_types_test">
             <mark-failure>
-                <toolset name="msvc-8.0*"/>
-                <note author="Alexander Nasonov">
-		    I don't have an access to Windows and VC++ to
-		    investigate this issue.
+                <toolset name="gcc-mingw-4.*"/>
+                <toolset name="vacpp-10.1"/>
+                <note author="Antony Polukhin">
+                    Some compilers and STL realizations convert double and long double types with bigger precision loss than minimal. Such failures are not a lexical_cast, but a compiler fault. 
                 </note>
             </mark-failure>
         </test>
@@ -1344,6 +1346,45 @@
 
     </library>
 
+    <!-- detail -->
+    <library name="detail">
+        <mark-expected-failures>
+            <test name="correctly_disable"/>
+            <test name="correctly_disable_debug"/>
+            <toolset name="pathscale-4.*"/>
+            <toolset name="sun-5.10"/>
+            <toolset name="pgi-*"/>
+            <toolset name="msvc-9.0~stlport*"/>
+            <toolset name="msvc-9.0~wm5~stlport*"/>
+            <note author="Daniel James">
+            This indicates that forward declarations could probably be used
+            for these compilers but currently aren't. All these compilers use
+            STLport, which is compatible with forward declarations in some
+            circumstances, but not in others. I haven't looked into how to
+            determine this, so I've just set container_fwd to never forward
+            declare for STLport.
+            </note>
+        </mark-expected-failures>
+
+        <mark-expected-failures>
+            <test name="container_fwd"/>
+            <test name="container_fwd_debug"/>
+            <test name="container_no_fwd_test"/>
+            <toolset name="msvc-9.0~wm5~stlport5.2"/>
+            <note author="Daniel James">
+            Failing because these tests are run with warnings as errors,
+            and the standard library is causing warnings.
+            </note>
+        </mark-expected-failures>
+
+        <mark-expected-failures>
+            <test name="container_fwd_debug"/>
+            <toolset name="sun-5.10"/>
+            <note author="Daniel James">
+            STLport debug mode seems to be broken here.
+            </note>
+        </mark-expected-failures>
+    </library>
 
     <!-- dynamic_bitset -->
     <library name="dynamic_bitset">
@@ -1507,7 +1548,6 @@
             <toolset name="acc*"/>
             <toolset name="msvc-8.0~wm5*"/>
             <toolset name="vacpp*"/>
-            <toolset name="pathscale*"/>
             <toolset name="intel-linux-8.*"/>
             <toolset name="gcc-3.4.6_linux_ia64"/>
             <note author="J. L&#195;&#179;pez" date="03 Dec 2008">
@@ -1865,13 +1905,15 @@
             </note>
         </mark-unusable>
         <mark-unusable>
-            <toolset name="intel-darwin-11.1"/>
+            <toolset name="intel-darwin-10*"/>
+            <toolset name="intel-darwin-11*"/>
+            <toolset name="intel-darwin-12*"/>
             <note author="Barend Gehrels">
-                Intel 11.1 on Darwin raises a SIGSEGV in almost all unit tests.
+                Intel 11.1 and 12.0 on Darwin raises a SIGSEGV in almost all unit tests.
             </note>
         </mark-unusable>
         <mark-unusable>
-            <toolset name="pgi-11.2"/>
+            <toolset name="pgi-11*"/>
             <note author="Barend Gehrels">
                 pgi 11.1 does not support BOOST_AUTO and is not configured for UBLAS
             </note>
@@ -1879,7 +1921,7 @@
         <mark-unusable>
             <toolset name="msvc-9.0~wm5~stlport5.2"/>
             <note author="Barend Gehrels">
-                This configruation is not well configured for UBLAS
+                This configuration is not well configured for UBLAS
             </note>
         </mark-unusable>
     </library>
@@ -1958,7 +2000,7 @@
 		</mark-expected-failures>
 	</library>
 
-	<!-- interprocess-->
+    <!-- interprocess-->
     <library name="interprocess">
         <mark-unusable>
             <toolset name="borland-5.*"/>
@@ -1995,7 +2037,6 @@
             <toolset name="gcc-3.2*"/>
             <toolset name="gcc-3.3*"/>
             <toolset name="mipspro"/>
-            <toolset name="pathscale*"/>
             <toolset name="intel-linux-8.*"/>
             <note author="Ion Gazta&#241;aga">
                 The compiler does not support features that are essential for the library.
@@ -2338,7 +2379,6 @@
             <toolset name="gcc-3.2*"/>
             <toolset name="gcc-3.3*"/>
             <toolset name="mipspro"/>
-            <toolset name="pathscale*"/>
             <toolset name="intel-linux-8.*"/>
             <note author="Ion Gazta&#241;aga">
                 The compiler does not support features that are essential for the library.
@@ -6348,6 +6388,25 @@ These tests will fail in most compilers that don't support rvalue references.
         </mark-expected-failures>
 
     </library>
+
+    <library name="locale">
+        <mark-unusable>
+            <toolset name="sun*" />
+            <note author="Artyom Beilis">
+                This library is unusable due to bug #5373 in Boost.Thread
+                on this compiler.
+            </note>
+        </mark-unusable>
+        <mark-unusable>
+            <toolset name="*msvc*wm5*" />
+            <note author="Artyom Beilis">
+                Windows Mobile lacks essential features of the standard C
+                library like gmtime, mktime, localtime making it impossible
+                to use Boost.Locale on this platform.
+            </note>
+        </mark-unusable>
+    </library>
+
 
     <!-- /////////////// Standard note definitions /////////////// -->
 

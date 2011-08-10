@@ -35,11 +35,16 @@
 
 #include <boost/type_traits/integral_promotion.hpp>
 #include <string>
+#include <vector>
 #include <memory>
 
 #if (defined(BOOST_HAS_LONG_LONG) || defined(BOOST_HAS_MS_INT64)) \
     && !(defined(BOOST_MSVC) && BOOST_MSVC < 1300)
 #define LCAST_TEST_LONGLONG
+#endif
+
+#if defined(BOOST_NO_STRINGSTREAM) || defined(BOOST_NO_STD_WSTRING)
+#define BOOST_LCAST_NO_WCHAR_T
 #endif
 
 template<class CharT>
@@ -65,6 +70,7 @@ void test_conversion_to_char();
 void test_conversion_to_int();
 void test_conversion_to_double();
 void test_conversion_to_bool();
+void test_conversion_with_nonconst_char();
 void test_conversion_to_string();
 void test_conversion_from_to_wchar_t_alias();
 void test_conversion_to_pointer();
@@ -105,6 +111,7 @@ unit_test::test_suite *init_unit_test_suite(int, char *[])
     suite->add(BOOST_TEST_CASE(test_conversion_from_to_wchar_t_alias));
     suite->add(BOOST_TEST_CASE(test_conversion_to_pointer));
     suite->add(BOOST_TEST_CASE(test_conversion_to_string));
+    suite->add(BOOST_TEST_CASE(test_conversion_with_nonconst_char));
 #ifndef BOOST_LCAST_NO_WCHAR_T
     suite->add(BOOST_TEST_CASE(test_conversion_from_wchar_t));
     suite->add(BOOST_TEST_CASE(test_conversion_to_wchar_t));
@@ -193,6 +200,31 @@ void test_conversion_to_int()
         lexical_cast<int>(std::string("")), bad_lexical_cast);
     BOOST_CHECK_THROW(
         lexical_cast<int>(std::string("Test")), bad_lexical_cast);
+}
+
+void test_conversion_with_nonconst_char()
+{
+    std::vector<char> buffer;
+    buffer.push_back('1');
+    buffer.push_back('\0');
+    BOOST_CHECK_EQUAL(boost::lexical_cast<int>(&buffer[0]), 1);
+
+    std::vector<unsigned char> buffer2;
+    buffer2.push_back('1');
+    buffer2.push_back('\0');
+    BOOST_CHECK_EQUAL(boost::lexical_cast<int>(&buffer2[0]), 1);
+
+    std::vector<unsigned char> buffer3;
+    buffer3.push_back('1');
+    buffer3.push_back('\0');
+    BOOST_CHECK_EQUAL(boost::lexical_cast<int>(&buffer3[0]), 1);
+
+#ifndef BOOST_LCAST_NO_WCHAR_T
+    std::vector<wchar_t> buffer4;
+    buffer4.push_back(L'1');
+    buffer4.push_back(L'\0');
+    BOOST_CHECK_EQUAL(boost::lexical_cast<int>(&buffer4[0]), 1);
+#endif
 }
 
 void test_conversion_to_double()
