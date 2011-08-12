@@ -15,19 +15,22 @@
 #include <boost/fusion/iterator/next.hpp>
 #include <boost/mpl/minus.hpp>
 #include <boost/mpl/int.hpp>
+#include <boost/mpl/if.hpp>
 
 namespace boost { namespace fusion
 {
-    template <typename Iterator_>
+    template <typename Iterator_, bool IsLast>
     struct pop_back_iterator
         : iterator_adapter<
-            pop_back_iterator<Iterator_>
+            pop_back_iterator<Iterator_, IsLast>
           , Iterator_>
     {
         typedef iterator_adapter<
-            pop_back_iterator<Iterator_>
+            pop_back_iterator<Iterator_, IsLast>
           , Iterator_>
         base_type;
+
+        static bool const is_last = IsLast;
 
         pop_back_iterator(Iterator_ const& iterator_base)
             : base_type(iterator_base) {}
@@ -35,7 +38,7 @@ namespace boost { namespace fusion
         template <typename BaseIterator>
         struct make
         {
-            typedef pop_back_iterator<BaseIterator> type;
+            typedef pop_back_iterator<BaseIterator, is_last> type;
 
             static type
             call(BaseIterator const& i)
@@ -44,12 +47,24 @@ namespace boost { namespace fusion
             }
         };
 
+        template <typename I, bool IsLast_>
+        struct equal_to_helper
+            : mpl::identity<typename I::iterator_base_type>
+        {};
+
+        template <typename I>
+        struct equal_to_helper<I, true>
+            : result_of::next<
+                typename I::iterator_base_type>
+        {};
+
         template <typename I1, typename I2>
         struct equal_to
             : result_of::equal_to<
-                typename result_of::next<
-                    typename I1::iterator_base_type>::type
-              , typename I2::iterator_base_type
+                typename equal_to_helper<I1,
+                    (I2::is_last && !I1::is_last)>::type
+              , typename equal_to_helper<I2,
+                    (I1::is_last && !I2::is_last)>::type
             >
         {};
 
@@ -60,7 +75,7 @@ namespace boost { namespace fusion
                     typename First::iterator_base_type
                   , typename Last::iterator_base_type
                 >::type
-              , mpl::int_<1>
+              , mpl::int_<(Last::is_last?1:0)>
             >::type
         {};
     };
@@ -73,11 +88,11 @@ namespace boost { namespace fusion
             BOOST_MPL_ASSERT_NOT((result_of::empty<Sequence>));
 
             typedef pop_back_iterator<
-                typename begin<Sequence>::type>
+                typename begin<Sequence>::type, false>
             begin_type;
 
             typedef pop_back_iterator<
-                typename end<Sequence>::type>
+                typename end<Sequence>::type, true>
             end_type;
 
             typedef

@@ -56,6 +56,8 @@ namespace unordered
             ::boost::unordered::detail::rebind_wrap<
                 allocator_type, value_type>::type
             value_allocator;
+        typedef ::boost::unordered::detail::allocator_traits<value_allocator>
+            allocator_traits;
 
         typedef ::boost::unordered::detail::set<H, P,
             value_allocator> types;
@@ -66,13 +68,12 @@ namespace unordered
     public:
 
         typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::pointer pointer;
+            allocator_traits::pointer pointer;
         typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::const_pointer const_pointer;
-        typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::reference reference;
-        typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::const_reference const_reference;
+            allocator_traits::const_pointer const_pointer;
+
+        typedef value_type& reference;
+        typedef value_type const& const_reference;
 
         typedef std::size_t size_type;
         typedef std::ptrdiff_t difference_type;
@@ -127,7 +128,7 @@ namespace unordered
         unordered_set& operator=(
                 BOOST_COPY_ASSIGN_REF(unordered_set) x)
         {
-            table_ = x.table_;
+            table_.assign(x.table_);
             return *this;
         }
 
@@ -137,7 +138,7 @@ namespace unordered
         unordered_set& operator=(
                 BOOST_RV_REF(unordered_set) x)
         {
-            table_.move(x.table_);
+            table_.move_assign(x.table_);
             return *this;
         }
 
@@ -387,6 +388,8 @@ namespace unordered
             ::boost::unordered::detail::rebind_wrap<
                 allocator_type, value_type>::type
             value_allocator;
+        typedef ::boost::unordered::detail::allocator_traits<value_allocator>
+            allocator_traits;
 
         typedef ::boost::unordered::detail::multiset<H, P,
             value_allocator> types;
@@ -397,13 +400,12 @@ namespace unordered
     public:
 
         typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::pointer pointer;
+            allocator_traits::pointer pointer;
         typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::const_pointer const_pointer;
-        typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::reference reference;
-        typedef BOOST_DEDUCED_TYPENAME
-            value_allocator::const_reference const_reference;
+            allocator_traits::const_pointer const_pointer;
+
+        typedef value_type& reference;
+        typedef value_type const& const_reference;
 
         typedef std::size_t size_type;
         typedef std::ptrdiff_t difference_type;
@@ -458,7 +460,7 @@ namespace unordered
         unordered_multiset& operator=(
                 BOOST_COPY_ASSIGN_REF(unordered_multiset) x)
         {
-            table_ = x.table_;
+            table_.assign(x.table_);
             return *this;
         }
 
@@ -468,7 +470,7 @@ namespace unordered
         unordered_multiset& operator=(
                 BOOST_RV_REF(unordered_multiset) x)
         {
-            table_.move(x.table_);
+            table_.move_assign(x.table_);
             return *this;
         }
 

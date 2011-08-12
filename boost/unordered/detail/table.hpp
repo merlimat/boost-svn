@@ -21,6 +21,7 @@ namespace boost { namespace unordered { namespace detail {
     class table : public T::buckets, public T::functions
     {
         table(table const&);
+        table& operator=(table const&);
     public:
         typedef BOOST_DEDUCED_TYPENAME T::hasher hasher;
         typedef BOOST_DEDUCED_TYPENAME T::key_equal key_equal;
@@ -176,8 +177,7 @@ namespace boost { namespace unordered { namespace detail {
         ////////////////////////////////////////////////////////////////////////
         // Constructors
 
-        table(
-                std::size_t num_buckets,
+        table(std::size_t num_buckets,
                 hasher const& hf,
                 key_equal const& eq,
                 node_allocator const& a)
@@ -202,8 +202,8 @@ namespace boost { namespace unordered { namespace detail {
             }
         }
 
-        table(table& x, move_tag)
-          : buckets(x.node_alloc(), x.bucket_count_),
+        table(table& x, move_tag m)
+          : buckets(x, m),
             functions(x),
             size_(0),
             mlf_(1.0f),
@@ -235,13 +235,6 @@ namespace boost { namespace unordered { namespace detail {
         ~table()
         {}
 
-        table& operator=(table const& x)
-        {
-            table tmp(x, this->node_alloc());
-            this->fast_swap(tmp);
-            return *this;
-        }
-
         // Iterators
 
         node_ptr begin() const {
@@ -249,80 +242,13 @@ namespace boost { namespace unordered { namespace detail {
                 node_ptr() : this->buckets_[this->bucket_count_].next_;
         }
 
-        ////////////////////////////////////////////////////////////////////////
-        // Swap & Move
-
-        void swap(table& x)
+        void assign(table const& x)
         {
-            if(this->node_alloc() == x.node_alloc()) {
-                if(this != &x) this->fast_swap(x);
-            }
-            else {
-                this->slow_swap(x);
-            }
+            table tmp(x, this->node_alloc());
+            this->fast_swap(tmp);
         }
 
-        void fast_swap(table& x)
-        {
-            // These can throw, but they only affect the function objects
-            // that aren't in use so it is strongly exception safe, via.
-            // double buffering.
-            {
-                set_hash_functions<hasher, key_equal> op1(*this, x);
-                set_hash_functions<hasher, key_equal> op2(x, *this);
-                op1.commit();
-                op2.commit();
-            }
-            this->buckets::swap(x); // No throw
-            std::swap(this->size_, x.size_);
-            std::swap(this->mlf_, x.mlf_);
-            std::swap(this->max_load_, x.max_load_);
-        }
-
-        void slow_swap(table& x)
-        {
-            if(this == &x) return;
-    
-            {
-                // These can throw, but they only affect the function objects
-                // that aren't in use so it is strongly exception safe, via.
-                // double buffering.
-                set_hash_functions<hasher, key_equal> op1(*this, x);
-                set_hash_functions<hasher, key_equal> op2(x, *this);
-            
-                // Create new buckets in separate buckets objects
-                // which will clean up if anything throws an exception.
-                // (all can throw, but with no effect as these are new objects).
-            
-                buckets b1(this->node_alloc(), x.min_buckets_for_size(x.size_));
-                if (x.size_) x.copy_buckets_to(b1);
-            
-                buckets b2(x.node_alloc(), this->min_buckets_for_size(this->size_));
-                if (this->size_) this->copy_buckets_to(b2);
-            
-                // Modifying the data, so no throw from now on.
-            
-                b1.swap(*this);
-                b2.swap(x);
-                op1.commit();
-                op2.commit();
-            }
-            
-            std::swap(this->size_, x.size_);
-    
-            this->max_load_ = !this->buckets_ ? 0 : this->calculate_max_load();
-            x.max_load_ = !x.buckets_ ? 0 : x.calculate_max_load();
-        }
-
-        void partial_swap(table& x)
-        {
-            this->buckets::swap(x); // No throw
-            std::swap(this->size_, x.size_);
-            std::swap(this->mlf_, x.mlf_);
-            std::swap(this->max_load_, x.max_load_);
-        }
-
-        void move(table& x)
+        void move_assign(table& x)
         {
             // This can throw, but it only affects the function objects
             // that aren't in use so it is strongly exception safe, via.
@@ -356,6 +282,53 @@ namespace boost { namespace unordered { namespace detail {
             // We've made it, the rest is no throw.
             this->mlf_ = x.mlf_;
             new_func_this.commit();
+        }
+
+        ////////////////////////////////////////////////////////////////////////
+        // Swap & Move
+
+        void swap(table& x)
+        {
+            // TODO: Should I actually swap the buckets even if this
+            // is with self?
+            if(this != &x) {
+                {
+                    set_hash_functions<hasher, key_equal> op1(*this, x);
+                    set_hash_functions<hasher, key_equal> op2(x, *this);
+    
+                    this->buckets::swap(x, integral_constant<bool,
+                            allocator_traits<node_allocator>::
+                            propagate_on_container_swap::value>());
+    
+                    op1.commit();
+                    op2.commit();
+                }
+
+                std::swap(this->size_, x.size_);
+                std::swap(this->mlf_, x.mlf_);
+                std::swap(this->max_load_, x.max_load_);
+            }
+        }
+
+        // Swap everything but the allocators
+        void fast_swap(table& x)
+        {
+            {
+                set_hash_functions<hasher, key_equal> op1(*this, x);
+                set_hash_functions<hasher, key_equal> op2(x, *this);
+                op1.commit();
+                op2.commit();
+            }
+            partial_swap(x);
+        }
+
+        // Swap everything but the allocators, and the functions objects.
+        void partial_swap(table& x)
+        {
+            this->buckets::swap(x, false_type());
+            std::swap(this->size_, x.size_);
+            std::swap(this->mlf_, x.mlf_);
+            std::swap(this->max_load_, x.max_load_);
         }
 
         ////////////////////////////////////////////////////////////////////////
@@ -617,13 +590,13 @@ namespace boost { namespace unordered { namespace iterator_detail {
     class l_iterator
         : public ::boost::iterator <
             std::forward_iterator_tag,
-            BOOST_DEDUCED_TYPENAME A::value_type,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type,
             std::ptrdiff_t,
-            BOOST_DEDUCED_TYPENAME A::pointer,
-            BOOST_DEDUCED_TYPENAME A::reference>
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::pointer,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type&>
     {
     public:
-        typedef BOOST_DEDUCED_TYPENAME A::value_type value_type;
+        typedef BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type value_type;
 
     private:
         typedef ::boost::unordered::detail::buckets<A, Unique> buckets;
@@ -641,7 +614,7 @@ namespace boost { namespace unordered { namespace iterator_detail {
         l_iterator() : ptr_() {}
         l_iterator(node_ptr x, std::size_t b, std::size_t c)
             : ptr_(x), bucket_(b), bucket_count_(c) {}
-        BOOST_DEDUCED_TYPENAME A::reference operator*() const {
+        BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type& operator*() const {
             return node::get_value(ptr_);
         }
         value_type* operator->() const {
@@ -678,13 +651,13 @@ namespace boost { namespace unordered { namespace iterator_detail {
     class cl_iterator
         : public ::boost::iterator <
             std::forward_iterator_tag,
-            BOOST_DEDUCED_TYPENAME A::value_type,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type,
             std::ptrdiff_t,
-            BOOST_DEDUCED_TYPENAME A::const_pointer,
-            BOOST_DEDUCED_TYPENAME A::const_reference >
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::const_pointer,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type const& >
     {
     public:
-        typedef BOOST_DEDUCED_TYPENAME A::value_type value_type;
+        typedef BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type value_type;
 
     private:
         typedef ::boost::unordered::detail::buckets<A, Unique> buckets;
@@ -705,7 +678,7 @@ namespace boost { namespace unordered { namespace iterator_detail {
         cl_iterator(local_iterator x)
             : ptr_(x.ptr_), bucket_(x.bucket_), bucket_count_(x.bucket_count_)
         {}
-        BOOST_DEDUCED_TYPENAME A::const_reference
+        BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type const&
             operator*() const {
             return node::get_value(ptr_);
         }
@@ -743,13 +716,13 @@ namespace boost { namespace unordered { namespace iterator_detail {
     class iterator
         : public ::boost::iterator <
             std::forward_iterator_tag,
-            BOOST_DEDUCED_TYPENAME A::value_type,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type,
             std::ptrdiff_t,
-            BOOST_DEDUCED_TYPENAME A::pointer,
-            BOOST_DEDUCED_TYPENAME A::reference >
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::pointer,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type& >
     {
     public:
-        typedef BOOST_DEDUCED_TYPENAME A::value_type value_type;
+        typedef BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type value_type;
 
     private:
         typedef ::boost::unordered::detail::buckets<A, Unique> buckets;
@@ -763,7 +736,7 @@ namespace boost { namespace unordered { namespace iterator_detail {
 
         iterator() : node_() {}
         explicit iterator(node_ptr const& x) : node_(x) {}
-        BOOST_DEDUCED_TYPENAME A::reference operator*() const {
+        BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type& operator*() const {
             return node::get_value(node_);
         }
         value_type* operator->() const {
@@ -793,13 +766,13 @@ namespace boost { namespace unordered { namespace iterator_detail {
     class c_iterator
         : public ::boost::iterator <
             std::forward_iterator_tag,
-            BOOST_DEDUCED_TYPENAME A::value_type,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type,
             std::ptrdiff_t,
-            BOOST_DEDUCED_TYPENAME A::const_pointer,
-            BOOST_DEDUCED_TYPENAME A::const_reference >
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::const_pointer,
+            BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type const& >
     {
     public:
-        typedef BOOST_DEDUCED_TYPENAME A::value_type value_type;
+        typedef BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type value_type;
 
     private:
         typedef ::boost::unordered::detail::buckets<A, Unique> buckets;
@@ -829,7 +802,7 @@ namespace boost { namespace unordered { namespace iterator_detail {
         c_iterator() : node_() {}
         explicit c_iterator(node_ptr const& x) : node_(x) {}
         c_iterator(iterator const& x) : node_(x.node_) {}
-        BOOST_DEDUCED_TYPENAME A::const_reference operator*() const {
+        BOOST_DEDUCED_TYPENAME boost::unordered::detail::allocator_traits<A>::value_type const& operator*() const {
             return node::get_value(node_);
         }
         value_type const* operator->() const {

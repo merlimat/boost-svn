@@ -22,6 +22,7 @@ namespace boost { namespace unordered { namespace detail {
         typedef BOOST_DEDUCED_TYPENAME T::value_type value_type;
         typedef BOOST_DEDUCED_TYPENAME T::table_base table_base;
         typedef BOOST_DEDUCED_TYPENAME T::node_constructor node_constructor;
+        typedef BOOST_DEDUCED_TYPENAME T::node_allocator node_allocator;
 
         typedef BOOST_DEDUCED_TYPENAME T::node node;
         typedef BOOST_DEDUCED_TYPENAME T::node_ptr node_ptr;
@@ -34,7 +35,9 @@ namespace boost { namespace unordered { namespace detail {
             hasher const& hf, key_equal const& eq, value_allocator const& a)
           : table_base(n, hf, eq, a) {}
         equivalent_table(equivalent_table const& x)
-          : table_base(x, x.node_alloc()) {}
+          : table_base(x,
+                allocator_traits<node_allocator>::
+                select_on_container_copy_construction(x.node_alloc())) {}
         equivalent_table(equivalent_table const& x,
             value_allocator const& a)
           : table_base(x, a) {}
@@ -279,10 +282,10 @@ namespace boost { namespace unordered { namespace detail {
 
     template <class H, class P, class A>
     struct multiset : public types<
-        BOOST_DEDUCED_TYPENAME A::value_type,
-        BOOST_DEDUCED_TYPENAME A::value_type,
+        BOOST_DEDUCED_TYPENAME allocator_traits<A>::value_type,
+        BOOST_DEDUCED_TYPENAME allocator_traits<A>::value_type,
         H, P, A,
-        set_extractor<BOOST_DEDUCED_TYPENAME A::value_type>,
+        set_extractor<BOOST_DEDUCED_TYPENAME allocator_traits<A>::value_type>,
         false>
     {
         typedef equivalent_table<multiset<H, P, A> > impl;
@@ -291,9 +294,9 @@ namespace boost { namespace unordered { namespace detail {
 
     template <class K, class H, class P, class A>
     struct multimap : public types<
-        K, BOOST_DEDUCED_TYPENAME A::value_type,
+        K, BOOST_DEDUCED_TYPENAME allocator_traits<A>::value_type,
         H, P, A,
-        map_extractor<K, BOOST_DEDUCED_TYPENAME A::value_type>,
+        map_extractor<K, BOOST_DEDUCED_TYPENAME allocator_traits<A>::value_type>,
         false>
     {
         typedef equivalent_table<multimap<K, H, P, A> > impl;
