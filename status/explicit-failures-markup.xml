@@ -603,6 +603,24 @@
         </test>
     </library>
 
+    <!-- container-->
+    <library name="container">
+        <mark-unusable>
+            <toolset name="borland-5.*"/>
+            <toolset name="msvc-6.5*"/>
+            <toolset name="cw-9.*"/>
+            <toolset name="gcc-2.95*"/>
+            <toolset name="gcc-3.0*"/>
+            <toolset name="gcc-3.1*"/>
+            <toolset name="gcc-3.2*"/>
+            <toolset name="gcc-3.3*"/>
+            <toolset name="mipspro"/>
+            <toolset name="intel-linux-8.*"/>
+            <note author="Ion Gazta&#241;aga">
+                The compiler does not support features that are essential for the library.
+            </note>
+        </mark-unusable>
+    </library>
 
     <!-- conversion -->
     <library name="conversion">
@@ -628,6 +646,7 @@
                 <toolset name="borland-5.8*"/>
                 <toolset name="borland-5.9*"/>
                 <toolset name="intel-darwin-11.*"/>
+                <toolset name="intel-darwin-12.0"/>
                 <toolset name="gcc-3.4.0*"/>
                 <toolset name="gcc-4.1*"/>
                 <toolset name="gcc-4.2.0*"/>
@@ -652,8 +671,13 @@
             <mark-failure>
                 <toolset name="gcc-mingw-4.*"/>
                 <toolset name="vacpp-10.1"/>
+                <toolset name="vacpp"/>
+                <toolset name="msvc-9.0~stlport5.2"/>
+                <toolset name="msvc-9.0~wm5~stlport5.2"/>
+                <toolset name="intel-darwin-11.*"/>
+                <toolset name="intel-darwin-12.0"/>
                 <note author="Antony Polukhin">
-                    Some compilers and STL realizations convert double and long double types with bigger precision loss than minimal. Such failures are not a lexical_cast, but a compiler fault. 
+                    Some compilers and STL realizations convert double and long double types with bigger precision loss than minimal (or even round to infinity). Such failures are not a lexical_cast, but a compiler fault. 
                 </note>
             </mark-failure>
         </test>
@@ -1581,7 +1605,7 @@
             <toolset name="gcc-3.2*"/>
             <toolset name="gcc-3_3-darwin"/>
             <toolset name="intel-linux"/>
-            <toolset name="vacpp"/>
+            <toolset name="vacpp*"/>
             <toolset name="cw-8.3"/>
             <toolset name="cw-9.4"/>
             <toolset name="cw-9.5-darwin"/>
@@ -1592,7 +1616,7 @@
             <toolset name="sun-5.7"/>
             <toolset name="sun-5.8"/>
             <toolset name="sun-5.9"/>
-            <toolset name="pathscale*"/>
+            <toolset name="sun-5.10"/>
             <note author="Eric Niebler">
                 This compiler does not support detection of
                 const rvalues.
@@ -1611,7 +1635,7 @@
             <toolset name="gcc-3.2*"/>
             <toolset name="gcc-3_3-darwin"/>
             <toolset name="intel-linux"/>
-            <toolset name="vacpp"/>
+            <toolset name="vacpp*"/>
             <toolset name="cw-8.3"/>
             <toolset name="cw-9.4"/>
             <toolset name="cw-9.5-darwin"/>
@@ -1622,7 +1646,7 @@
             <toolset name="sun-5.7"/>
             <toolset name="sun-5.8"/>
             <toolset name="sun-5.9"/>
-            <toolset name="pathscale*"/>
+            <toolset name="sun-5.10"/>
             <note author="Eric Niebler">
                 This compiler does not support detection of
                 const rvalues.
@@ -1642,6 +1666,7 @@
             <toolset name="sun-5.7"/>
             <toolset name="sun-5.8"/>
             <toolset name="sun-5.9"/>
+            <toolset name="sun-5.10"/>
             <note author="Eric Niebler">
                 This compiler does not support detection of
                 rvalues.
@@ -1661,6 +1686,7 @@
             <toolset name="sun-5.7"/>
             <toolset name="sun-5.8"/>
             <toolset name="sun-5.9"/>
+            <toolset name="sun-5.10"/>
             <note author="Eric Niebler">
                 This compiler does not support detection of
                 rvalues.
@@ -1686,6 +1712,16 @@
                 ADL which these compilers do not support.
             </note>
         </mark-expected-failures>
+
+        <mark-expected-failures>
+            <test name="noncopyable_rvalue_const"/>
+            <test name="noncopyable_rvalue_const_r"/>
+            <test name="noncopyable_rvalue_nonconst"/>
+            <test name="noncopyable_rvalue_nonconst_r"/>
+            <toolset name="*"/>
+            <note refid="50" author="Eric Niebler"/>
+        </mark-expected-failures>
+
     </library>
 
     <!-- format -->
@@ -2788,6 +2824,7 @@ for more information.
         <toolset name="sun-5.10"/>
         <toolset name="borland-*"/>
         <toolset name="vacpp"/>
+        <toolset name="vacpp-*"/>
       </mark-unusable>
     </library>
 
@@ -6397,14 +6434,34 @@ These tests will fail in most compilers that don't support rvalue references.
                 on this compiler.
             </note>
         </mark-unusable>
+
         <mark-unusable>
-            <toolset name="*msvc*wm5*" />
+            <toolset name="msvc-9.0~wm5~stlport5.2" />
             <note author="Artyom Beilis">
                 Windows Mobile lacks essential features of the standard C
                 library like gmtime, mktime, localtime making it impossible
                 to use Boost.Locale on this platform.
             </note>
         </mark-unusable>
+
+        <mark-expected-failures>
+            <test name="test_date_time" />
+            <toolset name="gcc-mingw-4.4.0"/>
+            <note author="Artyom Beilis">
+                Compiler does not support shared runtime linking
+                thus is makes it problematic to use Boost.Locale as dll
+            </note>
+        </mark-expected-failures>
+
+        <mark-expected-failures>
+            <test name="test_codepage"/>
+            <toolset name="pathscale-4*"/>
+            <note author="Artyom Beilis">
+                Problems with wide file stream I/O. 
+                Currently unresolved due to lack of access to the 
+                compiler.
+            </note>
+        </mark-expected-failures>
     </library>
 
 
@@ -6652,6 +6709,10 @@ These tests will fail in most compilers that don't support rvalue references.
 
     <note id="49">
         This test fails because MinGW apparently does not always catch exceptions properly.
+    </note>
+
+    <note id="50">
+        This test requires C++0x support.
     </note>
 
 </explicit-failures-markup>

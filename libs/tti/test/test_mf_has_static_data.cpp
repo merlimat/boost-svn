@@ -6,6 +6,7 @@
 
 #include "test_mf_has_static_data.hpp"
 #include <boost/detail/lightweight_test.hpp>
+#include <boost/tti/mf/mf_has_static_member_data.hpp>
 
 int main()
   {
@@ -16,16 +17,16 @@ int main()
                 <
                 BOOST_TTI_HAS_STATIC_MEMBER_DATA_GEN(DSMember)<_,_>,
                 boost::mpl::identity<AType>,
-                boost::mpl::identity<short>
+                short
                 >
               ::value
             ));
   
   BOOST_TEST((boost::tti::mf_has_static_member_data
                 <
-                BOOST_TTI_MTFC_HAS_STATIC_MEMBER_DATA_GEN(DSMember),
+                boost::mpl::quote2<BOOST_TTI_HAS_STATIC_MEMBER_DATA_GEN(DSMember)>,
                 boost::mpl::identity<AType>,
-                boost::mpl::identity<short>
+                short
                 >
               ::value
             ));

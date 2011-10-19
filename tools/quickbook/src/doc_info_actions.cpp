@@ -120,12 +120,17 @@ namespace quickbook
                 ;
         }
 
+        bool generated_id = false;
+
         if (!id.empty())
             actions.doc_id = id.get_quickbook();
 
         if (actions.doc_id.empty())
+        {
             actions.doc_id = detail::make_identifier(actions.doc_title_qbk);
-        
+            generated_id = true;
+        }
+
         if (dirname.empty() && actions.doc_type == "library") {
             if (!id.empty()) {
                 dirname = id;
@@ -233,7 +238,8 @@ namespace quickbook
             << "     \"http://www.boost.org/tools/boostbook/dtd/boostbook.dtd\">\n"
             << '<' << actions.doc_type << "\n"
             << "    id=\""
-            << actions.ids.add(actions.doc_id, id_generator::explicit_id)
+            << actions.ids.add(actions.doc_id, generated_id ?
+                id_generator::generated_doc : id_generator::explicit_id)
             << "\"\n";
         
         if(!lang.empty())
@@ -400,6 +406,20 @@ namespace quickbook
         {
             return;
         } 
+
+        // Close any open sections.
+        if (actions.section_level != 0) {
+            detail::outwarn(actions.filename)
+                << "Warning missing [endsect] detected at end of file."
+                << std::endl;
+
+            while(actions.section_level > 0) {
+                out << "</section>";
+                --actions.section_level;
+            }
+
+            actions.qualified_section_id.clear();
+        }
 
         // We've finished generating our output. Here's what we'll do
         // *after* everything else.

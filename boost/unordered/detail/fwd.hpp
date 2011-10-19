@@ -21,29 +21,32 @@ namespace unordered
 {
     template <class K,
         class T,
-        class H = hash<K>,
+        class H = boost::hash<K>,
         class P = std::equal_to<K>,
         class A = std::allocator<std::pair<const K, T> > >
     class unordered_map;
 
     template <class K,
         class T,
-        class H = hash<K>,
+        class H = boost::hash<K>,
         class P = std::equal_to<K>,
         class A = std::allocator<std::pair<const K, T> > >
     class unordered_multimap;
 
     template <class T,
-        class H = hash<T>,
+        class H = boost::hash<T>,
         class P = std::equal_to<T>,
         class A = std::allocator<T> >
     class unordered_set;
 
     template <class T,
-        class H = hash<T>,
+        class H = boost::hash<T>,
         class P = std::equal_to<T>,
         class A = std::allocator<T> >
     class unordered_multiset;
+
+    struct piecewise_construct_t {};
+    const piecewise_construct_t piecewise_construct = piecewise_construct_t();
 }
 }
 

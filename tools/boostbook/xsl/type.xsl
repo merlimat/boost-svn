@@ -395,6 +395,8 @@ Unknown type element "<xsl:value-of select="local-name(.)"/>" in type.display.na
           <xsl:with-param name="compact" select="$compact"/>
           <xsl:with-param name="indentation" select="$indentation"/>
           <xsl:with-param name="is-reference" select="false()"/>
+          <xsl:with-param name="max-type-length" select="$max-type-length"/>
+          <xsl:with-param name="max-name-length" select="$max-name-length"/>
         </xsl:call-template>
       </xsl:otherwise>
     </xsl:choose>
@@ -1190,6 +1192,38 @@ Unknown type element "<xsl:value-of select="local-name(.)"/>" in type.display.na
           <xsl:apply-templates select="para" mode="annotation"/>
         </xsl:if>
         <xsl:apply-templates select="description"/>
+
+        <!-- Document template parameters -->
+        <xsl:if test="(template/template-type-parameter/purpose|
+                      template/template-nontype-parameter/purpose)
+                      and not($template.param.brief)">
+          <varlistentry>
+            <term>Template Parameters:</term>
+            <listitem>
+              <variablelist spacing="compact">
+                <xsl:processing-instruction name="dbhtml">
+                  list-presentation="table"
+                </xsl:processing-instruction>
+                <xsl:for-each select="template/template-type-parameter|
+                      template/template-nontype-parameter">
+                  <xsl:sort select="attribute::name"/>
+                  <xsl:if test="purpose">
+                    <varlistentry>
+                      <term>
+                        <xsl:call-template name="monospaced">
+                          <xsl:with-param name="text" select="@name"/>
+                        </xsl:call-template>
+                      </term>
+                      <listitem>
+                        <xsl:apply-templates select="purpose/*"/>
+                      </listitem>
+                    </varlistentry>
+                  </xsl:if>
+                </xsl:for-each>
+              </variablelist>
+            </listitem>
+          </varlistentry>
+        </xsl:if>
 
         <xsl:call-template name="class-members-reference"/>
         <xsl:apply-templates select="access" mode="namespace-reference"/>

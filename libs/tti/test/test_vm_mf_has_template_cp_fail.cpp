@@ -6,11 +6,12 @@
 
 #include "test_vm_mf_has_template_cp.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_template_check_params.hpp>
 
 int main()
   {
   
-#if !defined(BOOST_NO_VARIADIC_MACROS)
+#if BOOST_PP_VARIADICS
 
   using namespace boost::mpl::placeholders;
   
@@ -22,7 +23,7 @@ int main()
                       boost::tti::mf_member_type
                         <
                         BOOST_TTI_MEMBER_TYPE_GEN(CType)<_>,
-                        BOOST_TTI_TRAIT_GEN(MT_BType)<AType>
+                        MT_BType<AType>
                         >
                       >
                   ));
@@ -31,7 +32,7 @@ int main()
   
   BOOST_MPL_ASSERT((boost::mpl::false_));
   
-#endif //!defined(BOOST_NO_VARIADIC_MACROS)
+#endif // BOOST_PP_VARIADICS
 
   return 0;
   

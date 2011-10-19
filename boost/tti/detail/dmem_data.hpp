@@ -9,16 +9,17 @@
 
 #include <boost/config.hpp>
 #include <boost/mpl/bool.hpp>
+#include <boost/preprocessor/cat.hpp>
 #include <boost/type_traits/detail/yes_no_type.hpp>
 #if !defined(BOOST_MSVC)
-#include "dmem_fun.hpp"
+#include <boost/tti/detail/dmem_fun.hpp>
 #endif
 
 #if defined(BOOST_MSVC)
 
 #define TTI_DETAIL_TRAIT_HAS_MEMBER_DATA(trait,name) \
   template<class T,class C> \
-  struct trait \
+  struct BOOST_PP_CAT(trait,_detail) \
     { \
     template<class> \
     struct return_of; \

@@ -6,6 +6,7 @@
 
 #include "test_mf_has_mem_fun.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_member_function.hpp>
 
 int main()
   {
@@ -21,9 +22,9 @@ int main()
                       BOOST_TTI_MEMBER_TYPE_GEN(AnIntType)<AnotherType>,
                       boost::mpl::vector
                         <
-                        boost::mpl::identity<int>,
-                        boost::mpl::identity<long>,
-                        boost::mpl::identity<double>
+                        int,
+                        long,
+                        double
                         >
                       >
                   ));

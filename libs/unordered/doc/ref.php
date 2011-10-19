@@ -60,10 +60,6 @@ EOL;
 
           </simpara></purpose>
           <description>
-            <para>Based on chapter 23 of
-              <ulink url="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2960.pdf">the working draft of the C++ standard [n2960]</ulink>.
-              But without the updated rules for allocators.
-            </para>
             <para><emphasis role="bold">Template Parameters</emphasis>
               <informaltable>
                 <tgroup cols="2">
@@ -120,16 +116,28 @@ EOL;
           </typedef>
           <typedef name="pointer">
             <type>typename allocator_type::pointer</type>
+            <description>
+              <para>
+                <code>value_type*</code> if
+                <code>allocator_type::pointer</code> is not defined.
+              </para>
+            </description>
           </typedef>
           <typedef name="const_pointer">
             <type>typename allocator_type::const_pointer</type>
+            <description>
+              <para>
+                <code>boost::pointer_to_other&lt;pointer, value_type&gt;::type</code>
+                if <code>allocator_type::const_pointer</code> is not defined.
+              </para>
+            </description>
           </typedef>
           <typedef name="reference">
-            <type>typename allocator_type::reference</type>
+            <type>value_type&amp;</type>
             <purpose><simpara>lvalue of <type>value_type</type>.</simpara></purpose>
           </typedef>
           <typedef name="const_reference">
-            <type>typename allocator_type::const_reference</type>
+            <type>value_type const&amp;</type>
             <purpose><simpara>const lvalue of <type>value_type</type>.</simpara></purpose>
           </typedef>
           <typedef name="size_type">
@@ -236,6 +244,9 @@ EOL;
             </parameter>
             <description>
               <para>The copy constructor. Copies the contained elements, hash function, predicate, maximum load factor and allocator.</para>
+              <para>If <code>Allocator::select_on_container_copy_construction</code>
+              exists and has the right signature, the allocator will be
+              constructed from its result.</para>
             </description>
             <requires>
               <para><code>value_type</code> is copy constructible</para>
@@ -249,12 +260,18 @@ EOL;
               <para>The move constructor.</para>
             </description>
             <notes>
-              <para>This is emulated on compilers without rvalue references.</para>
+              <para>This is implemented using Boost.Move.</para>
             </notes>
             <requires>
               <para>
                 <code>value_type</code> is move constructible.
-                (TODO: This is not actually required in this implementation).
+              </para>
+              <para>
+                On compilers without rvalue reference support the
+                emulation does not support moving without calling
+                <code>boost::move</code> if <code>value_type</code> is
+                not copyable. So, for example, you can't return the
+                container from a function.
               </para>
             </requires>
           </constructor>
@@ -289,14 +306,12 @@ EOL;
             <type><?php echo $name; ?>&amp;</type>
             <description>
               <para>The assignment operator. Copies the contained elements, hash function, predicate and maximum load factor but not the allocator.</para>
+              <para>If <code>Alloc::propagate_on_container_copy_assignment</code>
+              exists and <code>Alloc::propagate_on_container_copy_assignment::value
+              </code> is true, the allocator is overwritten, if not the
+              copied elements are created using the existing
+              allocator.</para>
             </description>
-            <notes>
-              <para>
-                On compilers without rvalue references, there is a single assignment
-                operator with the signature <code>operator=(<?php echo $name; ?>)</code>
-                in order to emulate move semantics.
-              </para>
-            </notes>
             <requires>
               <para><code>value_type</code> is copy constructible</para>
             </requires>
@@ -308,18 +323,22 @@ EOL;
             <type><?php echo $name; ?>&amp;</type>
             <description>
               <para>The move assignment operator.</para>
+              <para>If <code>Alloc::propagate_on_container_move_assignment</code>
+              exists and <code>Alloc::propagate_on_container_move_assignment::value
+              </code> is true, the allocator is overwritten, if not the
+              moved elements are created using the existing
+              allocator.</para>
             </description>
             <notes>
               <para>
-                On compilers without rvalue references, there is a single assignment
-                operator with the signature <code>operator=(<?php echo $name; ?>)</code>
-                in order to emulate move semantics.
+                On compilers without rvalue references, this is emulated using
+                Boost.Move. Note that on some compilers the copy assignment
+                operator may be used in some circumstances.
               </para>
             </notes>
             <requires>
               <para>
                 <code>value_type</code> is move constructible.
-                (TODO: This is not actually required in this implementation).
               </para>
             </requires>
           </method>
@@ -406,6 +425,13 @@ EOL;
                 <para>If the compiler doesn't support variadic template arguments or rvalue
                       references, this is emulated for up to 10 arguments, with no support
                       for rvalue references or move semantics.</para>
+                <para>Since existing <code>std::pair</code> implementations don't support
+                      <code>std::piecewise_construct</code> this emulates it,
+                      but using <code>boost::unordered::piecewise_construct</code>.</para>
+                <para>In version of Boost before 1.48 this emulated the variadic pair
+                      constructor from older C++0x drafts. For backwards compatability
+                      this can be enabled by defining the macro
+                      <code>BOOST_UNORDERED_DEPRECATED_PAIR_CONSTRUCT</code>.</para>
               </notes>
             </method>
             <method name="emplace_hint">
@@ -444,6 +470,13 @@ EOL;
                 <para>If the compiler doesn't support variadic template arguments or rvalue
                       references, this is emulated for up to 10 arguments, with no support
                       for rvalue references or move semantics.</para>
+                <para>Since existing <code>std::pair</code> implementations don't support
+                      <code>std::piecewise_construct</code> this emulates it,
+                      but using <code>boost::unordered::piecewise_construct</code>.</para>
+                <para>In version of Boost before 1.48 this emulated the variadic pair
+                      constructor from older C++0x drafts. For backwards compatability
+                      this can be enabled by defining the macro
+                      <code>BOOST_UNORDERED_DEPRECATED_PAIR_CONSTRUCT</code>.</para>
               </notes>
             </method>
             <method name="insert">
@@ -541,15 +574,13 @@ EOL;
               </returns>
               <throws>
                 <para>Only throws an exception if it is thrown by <code>hasher</code> or <code>key_equal</code>.</para>
-                <para>In this implementation, this overload doesn't call either function object's methods so it is no throw, but this might not be true in other implementations.</para>
               </throws>
               <notes>
                 <para>
-                  When the number of elements is a lot smaller than the number of buckets
-                  this function can be very inefficient as it has to search through empty
-                  buckets for the next element, in order to return the iterator.
-                  The method <methodname>quick_erase</methodname> is faster, but has yet
-                  to be standardized.
+                  In older versions this could be inefficient because it had to search
+                  through several buckets to find the position of the returned iterator.
+                  The data structure has been changed so that this is no longer the case,
+                  and the alternative erase methods have been deprecated.
                 </para>
               </notes>
             </method>
@@ -601,13 +632,10 @@ EOL;
               </throws>
               <notes>
                 <para>
-                  This method is faster than <methodname>erase</methodname> as
-                  it doesn't have to find the next element in the container -
-                  a potentially costly operation.
-                </para>
-                <para>
-                  As it hasn't been standardized, it's likely that this may
-                  change in the future.
+                  This method was implemented because returning an iterator to
+                  the next element from <code>erase</code> was expensive, but
+                  the container has been redesigned so that is no longer the
+                  case. So this method is now deprecated.
                 </para>
               </notes>
             </method>
@@ -625,10 +653,10 @@ EOL;
               </throws>
               <notes>
                 <para>
-                  This method is now deprecated, use
-                  <methodname>quick_return</methodname> instead. Although be
-                  warned that as that isn't standardized yet, it could also
-                  change.
+                  This method was implemented because returning an iterator to
+                  the next element from <code>erase</code> was expensive, but
+                  the container has been redesigned so that is no longer the
+                  case. So this method is now deprecated.
                 </para>
               </notes>
             </method>
@@ -649,12 +677,19 @@ EOL;
                 <paramtype><?php echo $name; ?>&amp;</paramtype>
               </parameter>
               <type>void</type>
+              <description>
+                <para>Swaps the contents of the container with the parameter.</para>
+                <para>If <code>Allocator::propagate_on_container_swap</code> is declared and
+                  <code>Allocator::propagate_on_container_swap::value</code> is true then the
+                  containers' allocators are swapped. Otherwise, swapping with unequal allocators
+                  results in undefined behavior.</para>
+              </description>
               <throws>
-                <para>If the allocators are equal, doesn't throw an exception unless it is thrown by the copy constructor or copy assignment operator of <code>key_equal</code> or <code>hasher</code>.</para>
+                <para>Doesn't throw an exception unless it is thrown by the copy constructor or copy assignment operator of <code>key_equal</code> or <code>hasher</code>.</para>
               </throws>
               <notes>
-                <para>For a discussion of the behavior when allocators aren't equal see
-                  <link linkend="unordered.rationale.swapping_containers_with_unequal_allocators">the implementation details</link>.</para>
+                <para>The exception specifications aren't quite the same as the C++11 standard, as
+                  the equality predieate and hash function are swapped using their copy constructors.</para>
               </notes>
             </method>
           </method-group>
@@ -788,10 +823,7 @@ EOL;
               <throws>
                 <para>An exception object of type <code>std::out_of_range</code> if no such element is present.</para>
               </throws>
-              <notes>
-                <para>This is not specified in the draft standard, but that is probably an oversight. The issue has been raised in
-                  <ulink url="http://groups.google.com/group/comp.std.c++/browse_thread/thread/ab7c22a868fd370b">comp.std.c++</ulink>.</para>
-              </notes>
+            </overloaded-method>
 <?php endif; ?>
           </method-group>
           <method-group name="bucket interface">
@@ -950,8 +982,28 @@ EOL;
                 <paramtype><?php echo $full_type; ?> const&amp;</paramtype>
               </parameter>
               <type>bool</type>
+              <description>
+<?php if($equivalent_keys): ?>
+                <para>Return <code>true</code> if <code>x.size() ==
+                y.size</code> and for every equivalent key group in
+                <code>x</code>, there is a group in <code>y</code>
+                for the same key, which is a permutation (using
+                <code>operator==</code> to compare the value types).
+                </para>
+<?php else: ?>
+                <para>Return <code>true</code> if <code>x.size() ==
+                y.size</code> and for every element in <code>x</code>,
+                there is an element in <code>y</code> with the same
+                for the same key, with an equal value (using
+                <code>operator==</code> to compare the value types).
+                </para>
+<?php endif; ?>
+              </description>
               <notes>
-                <para>This is a boost extension.</para>
+                <para>The behavior of this function was changed to match
+                  the C++11 standard in Boost 1.48. If you wish to use
+                  the old behaviour, define the macro
+                  <code>BOOST_UNORDERED_DEPRECATED_EQUALITY</code>.</para>
                 <para>Behavior is undefined if the two containers don't have
                     equivalent equality predicates.</para>
               </notes>
@@ -973,8 +1025,28 @@ EOL;
                 <paramtype><?php echo $full_type; ?> const&amp;</paramtype>
               </parameter>
               <type>bool</type>
+              <description>
+<?php if($equivalent_keys): ?>
+                <para>Return <code>false</code> if <code>x.size() ==
+                y.size</code> and for every equivalent key group in
+                <code>x</code>, there is a group in <code>y</code>
+                for the same key, which is a permutation (using
+                <code>operator==</code> to compare the value types).
+                </para>
+<?php else: ?>
+                <para>Return <code>false</code> if <code>x.size() ==
+                y.size</code> and for every element in <code>x</code>,
+                there is an element in <code>y</code> with the same
+                for the same key, with an equal value (using
+                <code>operator==</code> to compare the value types).
+                </para>
+<?php endif; ?>
+              </description>
               <notes>
-                <para>This is a boost extension.</para>
+                <para>The behavior of this function was changed to match
+                  the C++11 standard in Boost 1.48. If you wish to use
+                  the old behaviour, define the macro
+                  <code>BOOST_UNORDERED_DEPRECATED_EQUALITY</code>.</para>
                 <para>Behavior is undefined if the two containers don't have
                     equivalent equality predicates.</para>
               </notes>
@@ -1001,12 +1073,19 @@ EOL;
               <effects>
                 <para><code>x.swap(y)</code></para>
               </effects>
+              <description>
+                <para>Swaps the contents of <code>x</code> and <code>y</code>.</para>
+                <para>If <code>Allocator::propagate_on_container_swap</code> is declared and
+                  <code>Allocator::propagate_on_container_swap::value</code> is true then the
+                  containers' allocators are swapped. Otherwise, swapping with unequal allocators
+                  results in undefined behavior.</para>
+              </description>
               <throws>
-                <para>If the allocators are equal, doesn't throw an exception unless it is thrown by the copy constructor or copy assignment operator of <code>Hash</code> or <code>Pred</code>.</para>
+                <para>Doesn't throw an exception unless it is thrown by the copy constructor or copy assignment operator of <code>key_equal</code> or <code>hasher</code>.</para>
               </throws>
               <notes>
-                <para>For a discussion of the behavior when allocators aren't equal see
-                  <link linkend="unordered.rationale.swapping_containers_with_unequal_allocators">the implementation details</link>.</para>
+                <para>The exception specifications aren't quite the same as the C++11 standard, as
+                  the equality predieate and hash function are swapped using their copy constructors.</para>
               </notes>
             </function>
           </free-function-group>

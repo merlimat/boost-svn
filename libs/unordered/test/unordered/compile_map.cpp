@@ -45,11 +45,11 @@ template class boost::unordered_multimap<
 
 UNORDERED_AUTO_TEST(test0)
 {
+    test::minimal::constructor_param x;
+
     typedef std::pair<test::minimal::assignable const,
             test::minimal::copy_constructible> value_type;
-    value_type value(
-            test::minimal::assignable::create(),
-            test::minimal::copy_constructible::create());
+    value_type value(x, x);
 
     std::cout<<"Test unordered_map.\n";
 
@@ -151,12 +151,12 @@ UNORDERED_AUTO_TEST(test1) {
 
     unordered_unique_test(map, map_value);
     unordered_map_test(map, value, value);
-    unordered_test(map, value, map_value, hash, equal_to);
+    unordered_copyable_test(map, value, map_value, hash, equal_to);
     unordered_map_functions(map, value, value);
 
     unordered_unique_test(map2, map_value);
     unordered_map_test(map2, value, value);
-    unordered_test(map2, value, map_value, hash, equal_to);
+    unordered_copyable_test(map2, value, map_value, hash, equal_to);
     unordered_map_functions(map2, value, value);
 
     std::cout<<"Test unordered_multimap.\n";
@@ -170,23 +170,21 @@ UNORDERED_AUTO_TEST(test1) {
 
     unordered_equivalent_test(multimap, map_value);
     unordered_map_test(multimap, value, value);
-    unordered_test(multimap, value, map_value, hash, equal_to);
+    unordered_copyable_test(multimap, value, map_value, hash, equal_to);
 
     unordered_equivalent_test(multimap2, map_value);
     unordered_map_test(multimap2, value, value);
-    unordered_test(multimap2, value, map_value, hash, equal_to);
+    unordered_copyable_test(multimap2, value, map_value, hash, equal_to);
 }
 
 UNORDERED_AUTO_TEST(test2)
 {
-    test::minimal::assignable assignable
-        = test::minimal::assignable::create();
-    test::minimal::copy_constructible copy_constructible
-        = test::minimal::copy_constructible::create();
-    test::minimal::hash<test::minimal::assignable> hash
-        = test::minimal::hash<test::minimal::assignable>::create();
-    test::minimal::equal_to<test::minimal::assignable> equal_to
-        = test::minimal::equal_to<test::minimal::assignable>::create();
+    test::minimal::constructor_param x;
+
+    test::minimal::assignable assignable(x);
+    test::minimal::copy_constructible copy_constructible(x);
+    test::minimal::hash<test::minimal::assignable> hash(x);
+    test::minimal::equal_to<test::minimal::assignable> equal_to(x);
 
     typedef std::pair<test::minimal::assignable const,
             test::minimal::copy_constructible> map_value_type;
@@ -203,7 +201,7 @@ UNORDERED_AUTO_TEST(test2)
 
     unordered_unique_test(map, map_value);
     unordered_map_test(map, assignable, copy_constructible);
-    unordered_test(map, assignable, map_value, hash, equal_to);
+    unordered_copyable_test(map, assignable, map_value, hash, equal_to);
 
     boost::unordered_map<
         test::minimal::assignable,
@@ -227,7 +225,7 @@ UNORDERED_AUTO_TEST(test2)
 
     unordered_equivalent_test(multimap, map_value);
     unordered_map_test(multimap, assignable, copy_constructible);
-    unordered_test(multimap, assignable, map_value, hash, equal_to);
+    unordered_copyable_test(multimap, assignable, map_value, hash, equal_to);
 }
 
 RUN_TESTS()

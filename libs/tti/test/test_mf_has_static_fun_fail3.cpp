@@ -6,6 +6,7 @@
 
 #include "test_mf_has_static_fun.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_static_member_function.hpp>
 
 int main()
   {
@@ -21,8 +22,8 @@ int main()
                       BOOST_TTI_MEMBER_TYPE_GEN(AStructType)<AType>,
                       boost::mpl::vector
                         <
-                        BOOST_TTI_TRAIT_GEN(NameIntType)<AnotherType>,
-                        boost::mpl::identity<double>
+                        NameIntType<AnotherType>,
+                        double
                         >
                       >
                   ));

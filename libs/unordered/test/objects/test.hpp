@@ -9,11 +9,9 @@
 #include <boost/config.hpp>
 #include <boost/limits.hpp>
 #include <cstddef>
-#include <iostream>
 #include "../helpers/fwd.hpp"
 #include "../helpers/count.hpp"
 #include "../helpers/memory.hpp"
-#include <map>
 
 namespace test
 {
@@ -28,17 +26,7 @@ namespace test
     object generate(object const*);
     implicitly_convertible generate(implicitly_convertible const*);
     
-    struct true_type
-    {
-        enum { value = true };
-    };
-
-    struct false_type
-    {
-        enum { value = false };
-    };
-
-    class object : globally_counted_object
+    class object : private globally_counted_object
     {
         friend class hash;
         friend class equal_to;
@@ -76,7 +64,7 @@ namespace test
         }
     };
 
-    class implicitly_convertible : globally_counted_object
+    class implicitly_convertible : private globally_counted_object
     {
         int tag1_, tag2_;
     public:
@@ -195,18 +183,6 @@ namespace test
         }
     };
 
-    namespace detail
-    {
-        // This won't be a problem as I'm only using a single compile unit
-        // in each test (this is actually require by the minimal test
-        // framework).
-        // 
-        // boostinspect:nounnamed
-        namespace {
-            test::detail::memory_tracker<std::allocator<int> > tracker;
-        }
-    }
-
     template <class T>
     class allocator
     {
@@ -308,10 +284,13 @@ namespace test
         {
             return tag_ != x.tag_;
         }
-        
-        typedef true_type propagate_on_container_copy_assignment;
-        typedef true_type propagate_on_container_move_assignment;
-        typedef true_type propagate_on_container_swap;
+
+        enum {
+            is_select_on_copy = false,
+            is_propagate_on_swap = false,
+            is_propagate_on_assign = false,
+            is_propagate_on_move = false
+        };
     };
 
     template <class T>

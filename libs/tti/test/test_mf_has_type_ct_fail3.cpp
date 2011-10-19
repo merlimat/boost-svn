@@ -6,6 +6,7 @@
 
 #include "test_mf_has_type_ct.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_type.hpp>
 
 int main()
   {
@@ -16,9 +17,9 @@ int main()
   
   BOOST_MPL_ASSERT((boost::tti::mf_has_type
                       <
-                      BOOST_TTI_TRAIT_GEN(TheInteger)<_,_>,
+                      TheInteger<_,_>,
                       BOOST_TTI_MEMBER_TYPE_GEN(BType)<AType>,
-                      boost::mpl::identity<long>
+                      long
                       >
                   ));
   

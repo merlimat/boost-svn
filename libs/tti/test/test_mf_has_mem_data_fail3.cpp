@@ -6,6 +6,7 @@
 
 #include "test_mf_has_mem_data.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_member_data.hpp>
 
 int main()
   {
@@ -18,7 +19,7 @@ int main()
                       <
                       BOOST_TTI_HAS_MEMBER_DATA_GEN(aMember)<_,_>,
                       boost::mpl::identity<AType>,
-                      boost::mpl::identity<bool> 
+                      bool
                       >
                   ));
   

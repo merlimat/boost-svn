@@ -18,10 +18,10 @@
 // Boost.Test
 #include <boost/test/unit_test_log.hpp>
 #include <boost/test/unit_test_log_formatter.hpp>
-#include <boost/test/unit_test_suite_impl.hpp>
 #include <boost/test/execution_monitor.hpp>
+#include <boost/test/framework.hpp>
 
-#include <boost/test/detail/unit_test_parameters.hpp>
+#include <boost/test/unit_test_parameters.hpp>
 
 #include <boost/test/utils/basic_cstring/compare.hpp>
 
@@ -38,7 +38,6 @@ typedef ::boost::io::ios_base_all_saver io_saver_type;
 //____________________________________________________________________________//
 
 namespace boost {
-
 namespace unit_test {
 
 // ************************************************************************** //
@@ -235,8 +234,14 @@ unit_test_log_t::exception_caught( execution_exception const& ex )
         if( s_log_impl().m_entry_in_progress )
             *this << log::end();
 
-        s_log_impl().m_log_formatter->log_exception( s_log_impl().stream(), s_log_impl().m_checkpoint_data, ex );
+        s_log_impl().m_log_formatter->log_exception_start( s_log_impl().stream(), s_log_impl().m_checkpoint_data, ex );
+
+        log_entry_context();
+
+        s_log_impl().m_log_formatter->log_exception_finish( s_log_impl().stream() );
     }
+
+    clear_entry_context();
 }
 
 //____________________________________________________________________________//
@@ -282,10 +287,15 @@ unit_test_log_t::operator<<( log::begin const& b )
 unit_test_log_t&
 unit_test_log_t::operator<<( log::end const& )
 {
-    if( s_log_impl().m_entry_in_progress )
+    if( s_log_impl().m_entry_in_progress ) {
+        log_entry_context();
+
         s_log_impl().m_log_formatter->log_entry_finish( s_log_impl().stream() );
 
-    s_log_impl().m_entry_in_progress = false;
+        s_log_impl().m_entry_in_progress = false;
+    }
+
+    clear_entry_context();
 
     return *this;
 }
@@ -377,6 +387,33 @@ unit_test_log_t::operator<<( lazy_ostream const& value )
 //____________________________________________________________________________//
 
 void
+unit_test_log_t::log_entry_context()
+{
+    framework::context_generator const& context = framework::get_context();
+    if( context.is_empty() ) 
+        return;
+
+    const_string frame;
+
+    s_log_impl().m_log_formatter->entry_context_start( s_log_impl().stream() );
+
+    while( !(frame=context.next()).is_empty() )
+        s_log_impl().m_log_formatter->log_entry_context( s_log_impl().stream(), frame );
+
+    s_log_impl().m_log_formatter->entry_context_finish( s_log_impl().stream() );
+}
+
+//____________________________________________________________________________//
+
+void
+unit_test_log_t::clear_entry_context()
+{
+    framework::clear_context();
+}
+
+//____________________________________________________________________________//
+
+void
 unit_test_log_t::set_stream( std::ostream& str )
 {
     if( s_log_impl().m_entry_in_progress )
@@ -434,10 +471,7 @@ unit_test_log_formatter::log_entry_value( std::ostream& ostr, lazy_ostream const
 //____________________________________________________________________________//
 
 } // namespace unit_test
-
 } // namespace boost
-
-//____________________________________________________________________________//
 
 #include <boost/test/detail/enable_warnings.hpp>
 

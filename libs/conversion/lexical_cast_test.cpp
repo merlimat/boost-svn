@@ -99,10 +99,18 @@ void test_allocator();
 void test_wallocator();
 #endif
 void test_char_types_conversions();
+void operators_overload_test();
+#ifndef BOOST_NO_CHAR16_T
+void test_char16_conversions();
+#endif
+#ifndef BOOST_NO_CHAR32_T
+void test_char32_conversions();
+#endif
+
 
 unit_test::test_suite *init_unit_test_suite(int, char *[])
 {
-    unit_test_framework::test_suite *suite =
+    unit_test::test_suite *suite =
         BOOST_TEST_SUITE("lexical_cast unit test");
     suite->add(BOOST_TEST_CASE(test_conversion_to_char));
     suite->add(BOOST_TEST_CASE(test_conversion_to_int));
@@ -140,6 +148,13 @@ unit_test::test_suite *init_unit_test_suite(int, char *[])
 #endif
 
     suite->add(BOOST_TEST_CASE(&test_char_types_conversions));
+    suite->add(BOOST_TEST_CASE(&operators_overload_test));
+#ifndef BOOST_NO_CHAR16_T
+    suite->add(BOOST_TEST_CASE(&test_char16_conversions));
+#endif
+#ifndef BOOST_NO_CHAR32_T
+    suite->add(BOOST_TEST_CASE(&test_char32_conversions));
+#endif
 
     return suite;
 }
@@ -580,7 +595,7 @@ void test_conversion_from_integral_to_string(CharT)
 
         // Test values around zero:
         if(limits::is_signed)
-            for(t = -counter; t < static_cast<T>(counter); ++t)
+            for(t = static_cast<T>(-counter); t < static_cast<T>(counter); ++t)
                 BOOST_CHECK(lexical_cast<string_type>(t) == to_str<CharT>(t));
 
         // Test values around 100, 1000, 10000, ...
@@ -677,7 +692,7 @@ void test_conversion_from_string_to_integral(CharT)
 
         // Test values around zero:
         if(limits::is_signed)
-            for(t = -counter; t < static_cast<T>(counter); ++t)
+            for(t = static_cast<T>(-counter); t < static_cast<T>(counter); ++t)
                 BOOST_CHECK(lexical_cast<T>(to_str<CharT>(t)) == t);
 
         // Test values around 100, 1000, 10000, ...
@@ -740,6 +755,16 @@ void test_conversion_from_to_integral()
     wchar_t const wzero = L'0';
     test_conversion_from_integral_to_char<T>(wzero);
     test_conversion_from_char_to_integral<T>(wzero);
+#endif
+#ifndef BOOST_NO_CHAR16_T
+    char16_t const u16zero = u'0';
+    test_conversion_from_integral_to_char<T>(u16zero);
+    test_conversion_from_char_to_integral<T>(u16zero);
+#endif
+#ifndef BOOST_NO_CHAR32_T
+    char32_t const u32zero = u'0';
+    test_conversion_from_integral_to_char<T>(u32zero);
+    test_conversion_from_char_to_integral<T>(u32zero);
 #endif
 
     BOOST_CHECK(lexical_cast<T>("-1") == static_cast<T>(-1));
@@ -958,7 +983,50 @@ void test_char_types_conversions()
 
 
 
+struct foo_operators_test
+{
+  foo_operators_test() : f(2) {}
+  int f;
+};
+
+template <typename OStream>
+OStream& operator<<(OStream& ostr, const foo_operators_test& foo)
+{
+  ostr << foo.f;
+  return ostr;
+}
+
+template <typename IStream>
+IStream& operator>>(IStream& istr, foo_operators_test& foo)
+{
+  istr >> foo.f;
+  return istr;
+}
+
+void operators_overload_test()
+{
+    foo_operators_test foo;
+    BOOST_CHECK_EQUAL(boost::lexical_cast<std::string>(foo), "2");
+    BOOST_CHECK_EQUAL((boost::lexical_cast<foo_operators_test>("2")).f, 2);
+
+    // Must compile
+    (void)boost::lexical_cast<foo_operators_test>(foo);
+}
 
 
+#ifndef BOOST_NO_CHAR16_T
+void test_char16_conversions()
+{
+    BOOST_CHECK(u"100" == lexical_cast<std::u16string>(u"100"));
+    BOOST_CHECK(u"1" == lexical_cast<std::u16string>(u'1'));
+}
+#endif
 
+#ifndef BOOST_NO_CHAR32_T
+void test_char32_conversions()
+{
+    BOOST_CHECK(U"100" == lexical_cast<std::u32string>(U"100"));
+    BOOST_CHECK(U"1" == lexical_cast<std::u32string>(U'1'));
+}
+#endif
 

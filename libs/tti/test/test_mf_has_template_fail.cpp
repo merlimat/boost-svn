@@ -6,6 +6,7 @@
 
 #include "test_mf_has_template.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_template.hpp>
 
 int main()
   {
@@ -17,7 +18,7 @@ int main()
   BOOST_MPL_ASSERT((boost::tti::mf_has_template
                       <
                       BOOST_TTI_HAS_TEMPLATE_GEN(TemplateNotExist)<_>,
-                      BOOST_TTI_TRAIT_GEN(MT_BType)<AType>
+                      MT_BType<AType>
                       >
                   ));
   

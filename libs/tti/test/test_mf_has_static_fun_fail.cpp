@@ -6,6 +6,7 @@
 
 #include "test_mf_has_static_fun.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_static_member_function.hpp>
 
 int main()
   {
@@ -16,13 +17,13 @@ int main()
   
   BOOST_MPL_ASSERT((boost::tti::mf_has_static_member_function
                       <
-                      BOOST_TTI_TRAIT_GEN(Pickedname)<_,_,_>,
+                      Pickedname<_,_,_>,
                       boost::mpl::identity<AType>,
-                      boost::mpl::identity<short>,
+                      short,
                       boost::mpl::vector
                         <
-                        boost::mpl::identity<int>,
-                        boost::mpl::identity<long>
+                        int,
+                        long
                         >
                       >
                   ));

@@ -6,6 +6,7 @@
 
 #include "test_mf_has_type_ct.hpp"
 #include <boost/mpl/assert.hpp>
+#include <boost/tti/mf/mf_has_type.hpp>
 
 int main()
   {
@@ -18,7 +19,7 @@ int main()
                       <
                       BOOST_TTI_HAS_TYPE_GEN(NoOtherType)<_,_>,
                       boost::mpl::identity<AnotherType>,
-                      boost::mpl::identity<float>
+                      float
                       >
                   ));
   

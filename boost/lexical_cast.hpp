@@ -46,6 +46,7 @@
 #include <boost/static_assert.hpp>
 #include <boost/detail/lcast_precision.hpp>
 #include <boost/detail/workaround.hpp>
+#include <boost/container/container_fwd.hpp>
 #include <cwchar>
 
 
@@ -133,60 +134,108 @@ namespace boost
 
     namespace detail // selectors for choosing stream character type
     {
-        template<typename Type>
-        struct stream_char
-        {
-            typedef char type;
-        };
+    template<typename Type>
+    struct stream_char
+    {
+        typedef char type;
+    };
 
 #ifndef BOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
-        template<class CharT, class Traits, class Alloc>
-        struct stream_char< std::basic_string<CharT,Traits,Alloc> >
-        {
-            typedef CharT type;
-        };
+    template<class CharT, class Traits, class Alloc>
+    struct stream_char< std::basic_string<CharT,Traits,Alloc> >
+    {
+        typedef CharT type;
+    };
+
+    template<class CharT, class Traits, class Alloc>
+    struct stream_char< ::boost::container::basic_string<CharT,Traits,Alloc> >
+    {
+        typedef CharT type;
+    };
 #endif
 
 #ifndef BOOST_LCAST_NO_WCHAR_T
 #ifndef BOOST_NO_INTRINSIC_WCHAR_T
-        template<>
-        struct stream_char<wchar_t>
-        {
-            typedef wchar_t type;
-        };
+    template<>
+    struct stream_char<wchar_t>
+    {
+        typedef wchar_t type;
+    };
 #endif
 
-        template<>
-        struct stream_char<wchar_t *>
-        {
-            typedef wchar_t type;
-        };
+    template<>
+    struct stream_char<wchar_t *>
+    {
+        typedef wchar_t type;
+    };
 
-        template<>
-        struct stream_char<const wchar_t *>
-        {
-            typedef wchar_t type;
-        };
+    template<>
+    struct stream_char<const wchar_t *>
+    {
+        typedef wchar_t type;
+    };
 
 #ifdef BOOST_NO_TEMPLATE_PARTIAL_SPECIALIZATION
-        template<>
-        struct stream_char<std::wstring>
-        {
-            typedef wchar_t type;
-        };
+    template<>
+    struct stream_char<std::wstring>
+    {
+        typedef wchar_t type;
+    };
 #endif
+#endif
+
+
+#ifndef BOOST_NO_CHAR16_T
+
+    template<>
+    struct stream_char<char16_t>
+    {
+        typedef char16_t type;
+    };
+
+    template<>
+    struct stream_char<char16_t *>
+    {
+        typedef char16_t type;
+    };
+
+    template<>
+    struct stream_char<const char16_t *>
+    {
+        typedef char16_t type;
+    };
+
+#endif
+
+#ifndef BOOST_NO_CHAR32_T
+
+    template<>
+    struct stream_char<char32_t>
+    {
+        typedef char32_t type;
+    };
+
+    template<>
+    struct stream_char<char32_t *>
+    {
+        typedef char32_t type;
+    };
+
+    template<>
+    struct stream_char<const char32_t *>
+    {
+        typedef char32_t type;
+    };
+
 #endif
 
         template<typename TargetChar, typename SourceChar>
         struct widest_char
         {
-            typedef TargetChar type;
-        };
-
-        template<>
-        struct widest_char<char, wchar_t>
-        {
-            typedef wchar_t type;
+            typedef BOOST_DEDUCED_TYPENAME boost::mpl::if_c<
+                (sizeof(TargetChar) > sizeof(SourceChar))
+                , TargetChar
+                , SourceChar >::type type;
         };
     }
 
@@ -217,10 +266,37 @@ namespace boost
             typedef Traits type;
         };
 
+        template<class CharT, class Traits, class Alloc, class Source>
+        struct deduce_char_traits< CharT
+                                 , ::boost::container::basic_string<CharT,Traits,Alloc>
+                                 , Source
+                                 >
+        {
+            typedef Traits type;
+        };
+
+        template<class CharT, class Target, class Traits, class Alloc>
+        struct deduce_char_traits< CharT
+                                 , Target
+                                 , ::boost::container::basic_string<CharT,Traits,Alloc>
+                                 >
+        {
+            typedef Traits type;
+        };
+
         template<class CharT, class Traits, class Alloc1, class Alloc2>
         struct deduce_char_traits< CharT
                                  , std::basic_string<CharT,Traits,Alloc1>
                                  , std::basic_string<CharT,Traits,Alloc2>
+                                 >
+        {
+            typedef Traits type;
+        };
+
+        template<class CharT, class Traits, class Alloc1, class Alloc2>
+        struct deduce_char_traits< CharT
+                                 , ::boost::container::basic_string<CharT,Traits,Alloc1>
+                                 , ::boost::container::basic_string<CharT,Traits,Alloc2>
                                  >
         {
             typedef Traits type;
@@ -231,8 +307,7 @@ namespace boost
     namespace detail // lcast_src_length
     {
         // Return max. length of string representation of Source;
-        template< class CharT  // A result of widest_char transformation.
-                , class Source // Source type of lexical_cast.
+        template< class Source // Source type of lexical_cast.
                 >
         struct lcast_src_length
         {
@@ -261,7 +336,7 @@ namespace boost
 #ifndef BOOST_NO_LIMITS_COMPILE_TIME_CONSTANTS
             BOOST_STATIC_CONSTANT(std::size_t, value =
                   std::numeric_limits<Source>::is_signed +
-                  std::numeric_limits<Source>::is_specialized + // == 1
+                  std::numeric_limits<Source>::is_specialized + /* == 1 */
                   std::numeric_limits<Source>::digits10 * 2
               );
 #else
@@ -269,19 +344,11 @@ namespace boost
             BOOST_STATIC_ASSERT(sizeof(Source) * CHAR_BIT <= 256);
 #endif
         };
-
-#define BOOST_LCAST_DEF1(CharT, T)               \
-    template<> struct lcast_src_length<CharT, T> \
+// TODO: FIX for char16_t, char32_t, we can ignore CharT
+#define BOOST_LCAST_DEF(T)               \
+    template<> struct lcast_src_length<T> \
         : lcast_src_length_integral<T>           \
     { static void check_coverage() {} };
-
-#ifdef BOOST_LCAST_NO_WCHAR_T
-#define BOOST_LCAST_DEF(T) BOOST_LCAST_DEF1(char, T)
-#else
-#define BOOST_LCAST_DEF(T)          \
-        BOOST_LCAST_DEF1(char, T)   \
-        BOOST_LCAST_DEF1(wchar_t, T)
-#endif
 
         BOOST_LCAST_DEF(short)
         BOOST_LCAST_DEF(unsigned short)
@@ -298,7 +365,6 @@ namespace boost
 #endif
 
 #undef BOOST_LCAST_DEF
-#undef BOOST_LCAST_DEF1
 
 #ifndef BOOST_LCAST_NO_COMPILE_TIME_PRECISION
         // Helper for floating point types.
@@ -324,49 +390,26 @@ namespace boost
         };
 
         template<>
-        struct lcast_src_length<char,float>
+        struct lcast_src_length<float>
           : lcast_src_length_floating<float>
         {
             static void check_coverage() {}
         };
 
         template<>
-        struct lcast_src_length<char,double>
+        struct lcast_src_length<double>
           : lcast_src_length_floating<double>
         {
             static void check_coverage() {}
         };
 
         template<>
-        struct lcast_src_length<char,long double>
+        struct lcast_src_length<long double>
           : lcast_src_length_floating<long double>
         {
             static void check_coverage() {}
         };
 
-#ifndef BOOST_LCAST_NO_WCHAR_T
-    template<>
-    struct lcast_src_length<wchar_t,float>
-      : lcast_src_length_floating<float>
-    {
-        static void check_coverage() {}
-    };
-
-    template<>
-    struct lcast_src_length<wchar_t,double>
-      : lcast_src_length_floating<double>
-    {
-        static void check_coverage() {}
-    };
-
-    template<>
-    struct lcast_src_length<wchar_t,long double>
-      : lcast_src_length_floating<long double>
-    {
-        static void check_coverage() {}
-    };
-
-#endif // #ifndef BOOST_LCAST_NO_WCHAR_T
 #endif // #ifndef BOOST_LCAST_NO_COMPILE_TIME_PRECISION
     }
 
@@ -395,6 +438,32 @@ namespace boost
             BOOST_STATIC_CONSTANT(wchar_t, lowercase_e = L'e');
             BOOST_STATIC_CONSTANT(wchar_t, capital_e = L'E');
             BOOST_STATIC_CONSTANT(wchar_t, c_decimal_separator = L'.');
+        };
+#endif
+
+#ifndef BOOST_NO_CHAR16_T
+        template<>
+        struct lcast_char_constants<char16_t>
+        {
+            BOOST_STATIC_CONSTANT(char16_t, zero  = u'0');
+            BOOST_STATIC_CONSTANT(char16_t, minus = u'-');
+            BOOST_STATIC_CONSTANT(char16_t, plus = u'+');
+            BOOST_STATIC_CONSTANT(char16_t, lowercase_e = u'e');
+            BOOST_STATIC_CONSTANT(char16_t, capital_e = u'E');
+            BOOST_STATIC_CONSTANT(char16_t, c_decimal_separator = u'.');
+        };
+#endif
+
+#ifndef BOOST_NO_CHAR32_T
+        template<>
+        struct lcast_char_constants<char32_t>
+        {
+            BOOST_STATIC_CONSTANT(char32_t, zero  = U'0');
+            BOOST_STATIC_CONSTANT(char32_t, minus = U'-');
+            BOOST_STATIC_CONSTANT(char32_t, plus = U'+');
+            BOOST_STATIC_CONSTANT(char32_t, lowercase_e = U'e');
+            BOOST_STATIC_CONSTANT(char32_t, capital_e = U'E');
+            BOOST_STATIC_CONSTANT(char32_t, c_decimal_separator = U'.');
         };
 #endif
     }
@@ -426,7 +495,7 @@ namespace boost
     namespace detail // lcast_put_unsigned
     {
         template<class Traits, class T, class CharT>
-        CharT* lcast_put_unsigned(T n, CharT* finish)
+        CharT* lcast_put_unsigned(const T n_param, CharT* finish)
         {
 #ifndef BOOST_NO_LIMITS_COMPILE_TIME_CONSTANTS
             BOOST_STATIC_ASSERT(!std::numeric_limits<T>::is_signed);
@@ -435,51 +504,58 @@ namespace boost
             typedef typename Traits::int_type int_type;
             CharT const czero = lcast_char_constants<CharT>::zero;
             int_type const zero = Traits::to_int_type(czero);
+            BOOST_DEDUCED_TYPENAME boost::mpl::if_c<
+                    (sizeof(int_type) > sizeof(T))
+                    , int_type
+                    , T
+            >::type n = n_param;
 
 #ifndef BOOST_LEXICAL_CAST_ASSUME_C_LOCALE
             std::locale loc;
-            typedef std::numpunct<CharT> numpunct;
-            numpunct const& np = BOOST_USE_FACET(numpunct, loc);
-            std::string const& grouping = np.grouping();
-            std::string::size_type const grouping_size = grouping.size();
+            if (loc != std::locale::classic()) {
+                typedef std::numpunct<CharT> numpunct;
+                numpunct const& np = BOOST_USE_FACET(numpunct, loc);
+                std::string const grouping = np.grouping();
+                std::string::size_type const grouping_size = grouping.size();
 
-            if ( grouping_size && grouping[0] > 0 )
-            {
+                if ( grouping_size && grouping[0] > 0 )
+                {
 
 #ifndef BOOST_NO_LIMITS_COMPILE_TIME_CONSTANTS
-            // Check that ulimited group is unreachable:
-            BOOST_STATIC_ASSERT(std::numeric_limits<T>::digits10 < CHAR_MAX);
+                // Check that ulimited group is unreachable:
+                BOOST_STATIC_ASSERT(std::numeric_limits<T>::digits10 < CHAR_MAX);
 #endif
-                CharT thousands_sep = np.thousands_sep();
-                std::string::size_type group = 0; // current group number
-                char last_grp_size = grouping[0];
-                char left = last_grp_size;
+                    CharT thousands_sep = np.thousands_sep();
+                    std::string::size_type group = 0; // current group number
+                    char last_grp_size = grouping[0];
+                    char left = last_grp_size;
 
-                do
-                {
-                    if(left == 0)
+                    do
                     {
-                        ++group;
-                        if(group < grouping_size)
+                        if(left == 0)
                         {
-                            char const grp_size = grouping[group];
-                            last_grp_size = grp_size <= 0 ? CHAR_MAX : grp_size;
+                            ++group;
+                            if(group < grouping_size)
+                            {
+                                char const grp_size = grouping[group];
+                                last_grp_size = grp_size <= 0 ? CHAR_MAX : grp_size;
+                            }
+
+                            left = last_grp_size;
+                            --finish;
+                            Traits::assign(*finish, thousands_sep);
                         }
 
-                        left = last_grp_size;
+                        --left;
+
                         --finish;
-                        Traits::assign(*finish, thousands_sep);
-                    }
-
-                    --left;
-
-                    --finish;
-                    int_type const digit = static_cast<int_type>(n % 10U);
-                    Traits::assign(*finish, Traits::to_char_type(zero + digit));
-                    n /= 10;
-                } while(n);
-
-            } else
+                        int_type const digit = static_cast<int_type>(n % 10U);
+                        Traits::assign(*finish, Traits::to_char_type(zero + digit));
+                        n /= 10;
+                    } while(n);
+                    return finish;
+                }
+            }
 #endif
             {
                 do
@@ -516,61 +592,63 @@ namespace boost
 
 #ifndef BOOST_LEXICAL_CAST_ASSUME_C_LOCALE
             std::locale loc;
-            typedef std::numpunct<CharT> numpunct;
-            numpunct const& np = BOOST_USE_FACET(numpunct, loc);
-            std::string const& grouping = np.grouping();
-            std::string::size_type const grouping_size = grouping.size();
+            if (loc != std::locale::classic()) {
+                typedef std::numpunct<CharT> numpunct;
+                numpunct const& np = BOOST_USE_FACET(numpunct, loc);
+                std::string const& grouping = np.grouping();
+                std::string::size_type const grouping_size = grouping.size();
 
-            /* According to Programming languages - C++
-             * we MUST check for correct grouping
-             */
-            if (grouping_size && grouping[0] > 0)
-            {
-                unsigned char current_grouping = 0;
-                CharT const thousands_sep = np.thousands_sep();
-                char remained = grouping[current_grouping] - 1;
-                bool shall_we_return = true;
-
-                for(;end>=begin; --end)
+                /* According to Programming languages - C++
+                 * we MUST check for correct grouping
+                 */
+                if (grouping_size && grouping[0] > 0)
                 {
-                    if (remained) {
-                        T const new_sub_value = multiplier * 10 * (*end - czero);
+                    unsigned char current_grouping = 0;
+                    CharT const thousands_sep = np.thousands_sep();
+                    char remained = grouping[current_grouping] - 1;
+                    bool shall_we_return = true;
 
-                        if (*end < czero || *end >= czero + 10
-                                /* detecting overflow */
-                                || new_sub_value/10 != multiplier * (*end - czero)
-                                || static_cast<T>((std::numeric_limits<T>::max)()-new_sub_value) < value
-                                )
-                            return false;
+                    for(;end>=begin; --end)
+                    {
+                        if (remained) {
+                            T const new_sub_value = multiplier * 10 * (*end - czero);
 
-                        value += new_sub_value;
-                        multiplier *= 10;
-                        --remained;
-                    } else {
-                        if ( !Traits::eq(*end, thousands_sep) ) //|| begin == end ) return false;
-                        {
-                            /*
-                             * According to Programming languages - C++
-                             * Digit grouping is checked. That is, the positions of discarded
-                             * separators is examined for consistency with
-                             * use_facet<numpunct<charT> >(loc ).grouping()
-                             *
-                             * BUT what if there is no separators at all and grouping()
-                             * is not empty? Well, we have no extraced separators, so we
-                             * won`t check them for consistency. This will allow us to
-                             * work with "C" locale from other locales
-                             */
-                            shall_we_return = false;
-                            break;
+                            if (*end < czero || *end >= czero + 10
+                                    /* detecting overflow */
+                                    || new_sub_value/10 != multiplier * (*end - czero)
+                                    || static_cast<T>((std::numeric_limits<T>::max)()-new_sub_value) < value
+                                    )
+                                return false;
+
+                            value += new_sub_value;
+                            multiplier *= 10;
+                            --remained;
                         } else {
-                            if ( begin == end ) return false;
-                            if (current_grouping < grouping_size-1 ) ++current_grouping;
-                            remained = grouping[current_grouping];
+                            if ( !Traits::eq(*end, thousands_sep) ) //|| begin == end ) return false;
+                            {
+                                /*
+                                 * According to Programming languages - C++
+                                 * Digit grouping is checked. That is, the positions of discarded
+                                 * separators is examined for consistency with
+                                 * use_facet<numpunct<charT> >(loc ).grouping()
+                                 *
+                                 * BUT what if there is no separators at all and grouping()
+                                 * is not empty? Well, we have no extraced separators, so we
+                                 * won`t check them for consistency. This will allow us to
+                                 * work with "C" locale from other locales
+                                 */
+                                shall_we_return = false;
+                                break;
+                            } else {
+                                if ( begin == end ) return false;
+                                if (current_grouping < grouping_size-1 ) ++current_grouping;
+                                remained = grouping[current_grouping];
+                            }
                         }
                     }
-                }
 
-                if (shall_we_return) return true;
+                    if (shall_we_return) return true;
+                }
             }
 #endif
             {
@@ -774,7 +852,11 @@ namespace boost
             std::locale loc;
             typedef std::numpunct<CharT> numpunct;
             numpunct const& np = BOOST_USE_FACET(numpunct, loc);
-            std::string const& grouping = np.grouping();
+            std::string const grouping(
+                    (loc == std::locale::classic())
+                    ? std::string()
+                    : np.grouping()
+            );
             std::string::size_type const grouping_size = grouping.size();
             CharT const thousands_sep = grouping_size ? np.thousands_sep() : 0;
             CharT const decimal_point = np.decimal_point();
@@ -1209,6 +1291,14 @@ namespace boost
                 return true;
             }
 
+            template<class Alloc>
+            bool operator<<(::boost::container::basic_string<CharT,Traits,Alloc> const& str)
+            {
+                start = const_cast<CharT*>(str.data());
+                finish = start + str.length();
+                return true;
+            }
+
             bool operator<<(bool value)
             {
                 CharT const czero = lcast_char_constants<CharT>::zero;
@@ -1414,6 +1504,9 @@ namespace boost
 #else
             template<class Alloc>
             bool operator>>(std::basic_string<CharT,Traits,Alloc>& str) { str.assign(start, finish); return true; }
+
+            template<class Alloc>
+            bool operator>>(::boost::container::basic_string<CharT,Traits,Alloc>& str) { str.assign(start, finish); return true; }
 #endif
             /*
              * case "-0" || "0" || "+0" :   output = false; return true;
@@ -1550,31 +1643,47 @@ namespace boost
             BOOST_STATIC_CONSTANT(bool, value = true );
         };
 
+        template<typename CharT, typename Traits, typename Alloc>
+        struct is_stdstring< ::boost::container::basic_string<CharT, Traits, Alloc> >
+        {
+            BOOST_STATIC_CONSTANT(bool, value = true );
+        };
+
         template<typename T>
         struct is_char_or_wchar
         {
+        private:
 #ifndef BOOST_LCAST_NO_WCHAR_T
-            BOOST_STATIC_CONSTANT(bool, value =
-                    (
-                    ::boost::type_traits::ice_or<
-                         is_same< T, char >::value,
-                         is_same< T, wchar_t >::value,
-                         is_same< T, unsigned char >::value,
-                         is_same< T, signed char >::value
-                    >::value
-                    )
-            );
+            typedef wchar_t wchar_t_if_supported;
 #else
+            typedef char wchar_t_if_supported;
+#endif
+
+#ifndef BOOST_NO_CHAR16_T
+            typedef char16_t char16_t_if_supported;
+#else
+            typedef char char16_t_if_supported;
+#endif
+
+#ifndef BOOST_NO_CHAR32_T
+            typedef char32_t char32_t_if_supported;
+#else
+            typedef char char32_t_if_supported;
+#endif
+            public:
+
             BOOST_STATIC_CONSTANT(bool, value =
                     (
                     ::boost::type_traits::ice_or<
                          is_same< T, char >::value,
+                         is_same< T, wchar_t_if_supported >::value,
+                         is_same< T, char16_t_if_supported >::value,
+                         is_same< T, char32_t_if_supported >::value,
                          is_same< T, unsigned char >::value,
                          is_same< T, signed char >::value
                     >::value
                     )
             );
-#endif
         };
 
         template<typename Target, typename Source>
@@ -1640,6 +1749,18 @@ namespace boost
             BOOST_STATIC_CONSTANT(bool, value = true );
         };
 
+        template<typename CharT, typename Traits, typename Alloc>
+        struct is_char_array_to_stdstring< ::boost::container::basic_string<CharT, Traits, Alloc>, CharT* >
+        {
+            BOOST_STATIC_CONSTANT(bool, value = true );
+        };
+
+        template<typename CharT, typename Traits, typename Alloc>
+        struct is_char_array_to_stdstring< ::boost::container::basic_string<CharT, Traits, Alloc>, const CharT* >
+        {
+            BOOST_STATIC_CONSTANT(bool, value = true );
+        };
+
 #if (defined _MSC_VER)
 # pragma warning( push )
 # pragma warning( disable : 4701 ) // possible use of ... before initialization
@@ -1658,7 +1779,7 @@ namespace boost
                     , BOOST_DEDUCED_TYPENAME detail::stream_char<src>::type
                 >::type char_type;
 
-                typedef detail::lcast_src_length<char_type, src> lcast_src_length;
+                typedef detail::lcast_src_length<src> lcast_src_length;
                 std::size_t const src_len = lcast_src_length::value;
                 char_type buf[src_len + 1];
                 lcast_src_length::check_coverage();
@@ -1687,7 +1808,8 @@ namespace boost
                         interpreter(buf, buf + src_len);
 
                 Target result;
-                if(!(interpreter << arg && interpreter >> result))
+                // Disabling ADL, by directly specifying operators.
+                if(!(interpreter.operator <<(arg) && interpreter.operator >>(result)))
                   BOOST_LCAST_THROW_BAD_CAST(Source, Target);
                 return result;
             }

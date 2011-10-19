@@ -17,10 +17,10 @@
 
 // Boost.Test
 #include <boost/test/output/xml_log_formatter.hpp>
-#include <boost/test/unit_test_suite_impl.hpp>
+#include <boost/test/execution_monitor.hpp>
 #include <boost/test/framework.hpp>
+#include <boost/test/tree/test_unit.hpp>
 #include <boost/test/utils/basic_cstring/io.hpp>
-
 #include <boost/test/utils/xml_printer.hpp>
 
 // Boost
@@ -34,9 +34,7 @@
 //____________________________________________________________________________//
 
 namespace boost {
-
 namespace unit_test {
-
 namespace output {
 
 static const_string tu_type_name( test_unit const& tu )
@@ -110,7 +108,7 @@ xml_log_formatter::test_unit_skipped( std::ostream& ostr, test_unit const& tu )
 //____________________________________________________________________________//
 
 void
-xml_log_formatter::log_exception( std::ostream& ostr, log_checkpoint_data const& checkpoint_data, execution_exception const& ex )
+xml_log_formatter::log_exception_start( std::ostream& ostr, log_checkpoint_data const& checkpoint_data, execution_exception const& ex )
 {
     execution_exception::location const& loc = ex.where();
 
@@ -129,7 +127,13 @@ xml_log_formatter::log_exception( std::ostream& ostr, log_checkpoint_data const&
              << cdata() << checkpoint_data.m_message
              << "</LastCheckpoint>";
     }
+}
 
+//____________________________________________________________________________//
+
+void
+xml_log_formatter::log_exception_finish( std::ostream& ostr )
+{
     ostr << "</Exception>";
 }
 
@@ -145,6 +149,8 @@ xml_log_formatter::log_entry_start( std::ostream& ostr, log_entry_data const& en
          << BOOST_TEST_L( " file" ) << attr_value() << entry_data.m_file_name
          << BOOST_TEST_L( " line" ) << attr_value() << entry_data.m_line_num
          << BOOST_TEST_L( "><![CDATA[" );
+
+    m_value_closed = false;
 }
 
 //____________________________________________________________________________//
@@ -152,7 +158,7 @@ xml_log_formatter::log_entry_start( std::ostream& ostr, log_entry_data const& en
 void
 xml_log_formatter::log_entry_value( std::ostream& ostr, const_string value )
 {
-    ostr << value;
+    print_escaped_cdata( ostr, value );
 }
 
 //____________________________________________________________________________//
@@ -160,20 +166,51 @@ xml_log_formatter::log_entry_value( std::ostream& ostr, const_string value )
 void
 xml_log_formatter::log_entry_finish( std::ostream& ostr )
 {
-    ostr << BOOST_TEST_L( "]]></" ) << m_curr_tag << BOOST_TEST_L( ">" );
+    if( !m_value_closed ) {
+        ostr << BOOST_TEST_L( "]]>" );
+        m_value_closed = true;
+    }
+
+    ostr << BOOST_TEST_L( "</" ) << m_curr_tag << BOOST_TEST_L( ">" );
 
     m_curr_tag.clear();
 }
 
 //____________________________________________________________________________//
 
-} // namespace output
+void
+xml_log_formatter::entry_context_start( std::ostream& ostr )
+{
+    if( !m_value_closed ) {
+        ostr << BOOST_TEST_L( "]]>" );
+        m_value_closed = true;
+    }
 
-} // namespace unit_test
-
-} // namespace boost
+    ostr << BOOST_TEST_L( "<Context>" );
+   
+}
 
 //____________________________________________________________________________//
+
+void
+xml_log_formatter::entry_context_finish( std::ostream& ostr )
+{
+    ostr << BOOST_TEST_L( "</Context>" );
+}
+
+//____________________________________________________________________________//
+
+void
+xml_log_formatter::log_entry_context( std::ostream& ostr, const_string context_descr )
+{
+    ostr << BOOST_TEST_L( "<Frame>" ) << cdata() << context_descr << BOOST_TEST_L( "</Frame>" );
+}
+
+//____________________________________________________________________________//
+
+} // namespace output
+} // namespace unit_test
+} // namespace boost
 
 #include <boost/test/detail/enable_warnings.hpp>
 

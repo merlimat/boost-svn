@@ -7,131 +7,50 @@
 #ifndef BOOST_UNORDERED_DETAIL_UTIL_HPP_INCLUDED
 #define BOOST_UNORDERED_DETAIL_UTIL_HPP_INCLUDED
 
-#include <algorithm>
-#include <cstddef>
-#include <stdexcept>
-#include <utility>
-#include <boost/limits.hpp>
-#include <boost/config.hpp>
-#include <boost/config/no_tr1/cmath.hpp>
-#include <boost/detail/workaround.hpp>
-#include <boost/detail/select_type.hpp>
-#include <boost/assert.hpp>
-#include <boost/iterator.hpp>
+#if defined(_MSC_VER) && (_MSC_VER >= 1020)
+# pragma once
+#endif
+
+#include <boost/type_traits/is_convertible.hpp>
+#include <boost/type_traits/is_empty.hpp>
 #include <boost/iterator/iterator_categories.hpp>
-#include <boost/compressed_pair.hpp>
-#include <boost/type_traits/aligned_storage.hpp>
-#include <boost/type_traits/alignment_of.hpp>
-#include <boost/type_traits/remove_const.hpp>
-#include <boost/throw_exception.hpp>
-#include <boost/unordered/detail/allocator_helpers.hpp>
+#include <boost/utility/enable_if.hpp>
+#include <boost/detail/select_type.hpp>
+#include <boost/move/move.hpp>
 #include <boost/preprocessor/seq/size.hpp>
 #include <boost/preprocessor/seq/enum.hpp>
-#include <boost/preprocessor/repetition/enum.hpp>
-#include <boost/move/move.hpp>
-
-// Template parameters:
-//
-// H = Hash Function
-// P = Predicate
-// A = Value Allocator
-// G = Bucket group policy, 'grouped' or 'ungrouped'
-// E = Key Extractor
-
-#if !defined(BOOST_NO_RVALUE_REFERENCES) && \
-        !defined(BOOST_NO_VARIADIC_TEMPLATES)
-#   if defined(__SGI_STL_PORT) || defined(_STLPORT_VERSION)
-#   elif defined(__STD_RWCOMPILER_H__) || defined(_RWSTD_VER)
-#   elif defined(_LIBCPP_VERSION)
-#       define BOOST_UNORDERED_STD_FORWARD_MOVE
-#   elif defined(__GLIBCPP__) || defined(__GLIBCXX__)
-#       if defined(__GLIBCXX__) && __GLIBCXX__ >= 20090804
-#           define BOOST_UNORDERED_STD_FORWARD_MOVE
-#       endif
-#    elif defined(__STL_CONFIG_H)
-#    elif defined(__MSL_CPP__)
-#    elif defined(__IBMCPP__)
-#    elif defined(MSIPL_COMPILE_H)
-#    elif (defined(_YVALS) && !defined(__IBMCPP__)) || defined(_CPPLIB_VER)
-        // Visual C++. A version check would be a good idea.
-#       define BOOST_UNORDERED_STD_FORWARD_MOVE    
-#   endif
-#endif
-
-#if !defined(BOOST_UNORDERED_EMPLACE_LIMIT)
-#define BOOST_UNORDERED_EMPLACE_LIMIT 10
-#endif
-
-#if defined(__SUNPRO_CC)
-#define BOOST_UNORDERED_USE_RV_REF 0
-#else
-#define BOOST_UNORDERED_USE_RV_REF 1
-#endif
-
-#if !defined(BOOST_UNORDERED_STD_FORWARD_MOVE)
-
-#include <boost/preprocessor/repetition/enum_params.hpp>
-#include <boost/preprocessor/repetition/enum_binary_params.hpp>
-#include <boost/preprocessor/repetition/repeat_from_to.hpp>
-
-#define BOOST_UNORDERED_TEMPLATE_ARGS(z, num_params) \
-    BOOST_PP_ENUM_PARAMS_Z(z, num_params, class Arg)
-
-#define BOOST_UNORDERED_FUNCTION_PARAMS(z, num_params) \
-    BOOST_PP_ENUM_##z(num_params, BOOST_UNORDERED_FUNCTION_PARAMS2, _)
-#define BOOST_UNORDERED_FUNCTION_PARAMS2(z, i, _) \
-    BOOST_FWD_REF(Arg##i) arg##i
-
-#define BOOST_UNORDERED_CALL_PARAMS(z, num_params) \
-    BOOST_PP_ENUM_##z(num_params, BOOST_UNORDERED_CALL_PARAMS2, _)
-#define BOOST_UNORDERED_CALL_PARAMS2(z, i, _) \
-    boost::forward<Arg##i>(arg##i)
-
-#endif
+#include <boost/swap.hpp>
 
 namespace boost { namespace unordered { namespace detail {
 
     static const float minimum_max_load_factor = 1e-3f;
     static const std::size_t default_bucket_count = 11;
     struct move_tag {};
-
     struct empty_emplace {};
 
-    template <class T> class unique_table;
-    template <class T> class equivalent_table;
-    template <class Alloc, bool Unique> class node_constructor;
-    template <class ValueType>
-    struct set_extractor;
-    template <class Key, class ValueType>
-    struct map_extractor;
-    struct no_key;
-
-    // Explicitly call a destructor
-
-#if defined(BOOST_MSVC)
-#pragma warning(push)
-#pragma warning(disable:4100) // unreferenced formal parameter
-#endif
-
-    template <class T>
-    inline void destroy(T* x) {
-        x->~T();
-    }
-
-#if defined(BOOST_MSVC)
-#pragma warning(pop)
-#endif
-
     ////////////////////////////////////////////////////////////////////////////
-    // convert double to std::size_t
+    // iterator SFINAE
 
-    inline std::size_t double_to_size_t(double f)
-    {
-        return f >= static_cast<double>(
-            (std::numeric_limits<std::size_t>::max)()) ?
-            (std::numeric_limits<std::size_t>::max)() :
-            static_cast<std::size_t>(f);
-    }
+    template <typename I>
+    struct is_forward :
+        boost::is_convertible<
+            typename boost::iterator_traversal<I>::type,
+            boost::forward_traversal_tag>
+    {};
+
+    template <typename I, typename ReturnType>
+    struct enable_if_forward :
+        boost::enable_if_c<
+            boost::unordered::detail::is_forward<I>::value,
+            ReturnType>
+    {};
+
+    template <typename I, typename ReturnType>
+    struct disable_if_forward :
+        boost::disable_if_c<
+            boost::unordered::detail::is_forward<I>::value,
+            ReturnType>
+    {};
 
     ////////////////////////////////////////////////////////////////////////////
     // primes
@@ -197,62 +116,145 @@ namespace boost { namespace unordered { namespace detail {
     }
 
     ////////////////////////////////////////////////////////////////////////////
-    // pair_cast - because some libraries don't have the full pair constructors.
-
-#if 0
-    template <class Dst1, class Dst2, class Src1, class Src2>
-    inline std::pair<Dst1, Dst2> pair_cast(std::pair<Src1, Src2> const& x)
-    {
-        return std::pair<Dst1, Dst2>(Dst1(x.first), Dst2(x.second));
-    }
-
-#define BOOST_UNORDERED_PAIR_CAST(First, Last, Argument) \
-    ::boost::unordered::detail::pair_cast<First, Last>(Argument)
-#else
-#define BOOST_UNORDERED_PAIR_CAST(First, Last, Argument) \
-    Argument
-#endif
-    ////////////////////////////////////////////////////////////////////////////
     // insert_size/initial_size
 
 #if !defined(BOOST_NO_STD_DISTANCE)
+
     using ::std::distance;
+
 #else
+
     template <class ForwardIterator>
     inline std::size_t distance(ForwardIterator i, ForwardIterator j) {
         std::size_t x;
         std::distance(i, j, x);
         return x;
     }
+
 #endif
 
     template <class I>
-    inline std::size_t insert_size(I i, I j, ::boost::forward_traversal_tag)
+    inline typename
+        boost::unordered::detail::enable_if_forward<I, std::size_t>::type
+        insert_size(I i, I j)
     {
         return std::distance(i, j);
     }
 
     template <class I>
-    inline std::size_t insert_size(I, I, ::boost::incrementable_traversal_tag)
+    inline typename
+        boost::unordered::detail::disable_if_forward<I, std::size_t>::type
+        insert_size(I, I)
     {
         return 1;
     }
 
     template <class I>
-    inline std::size_t insert_size(I i, I j)
-    {
-        BOOST_DEDUCED_TYPENAME ::boost::iterator_traversal<I>::type
-            iterator_traversal_tag;
-        return insert_size(i, j, iterator_traversal_tag);
-    }
-    
-    template <class I>
     inline std::size_t initial_size(I i, I j,
-        std::size_t num_buckets = ::boost::unordered::detail::default_bucket_count)
+        std::size_t num_buckets =
+            boost::unordered::detail::default_bucket_count)
     {
-        return (std::max)(static_cast<std::size_t>(insert_size(i, j)) + 1,
+        // TODO: Why +1?
+        return (std::max)(
+            boost::unordered::detail::insert_size(i, j) + 1,
             num_buckets);
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // compressed
+
+    template <typename T, int Index>
+    struct compressed_base : private T
+    {
+        compressed_base(T const& x) : T(x) {}
+        compressed_base(T& x, move_tag) : T(boost::move(x)) {}
+
+        T& get() { return *this; }
+        T const& get() const { return *this; }
+    };
+    
+    template <typename T, int Index>
+    struct uncompressed_base
+    {
+        uncompressed_base(T const& x) : value_(x) {}
+        uncompressed_base(T& x, move_tag) : value_(boost::move(x)) {}
+
+        T& get() { return value_; }
+        T const& get() const { return value_; }
+    private:
+        T value_;
+    };
+    
+    template <typename T, int Index>
+    struct generate_base
+      : boost::detail::if_true<
+            boost::is_empty<T>::value
+        >:: BOOST_NESTED_TEMPLATE then<
+            boost::unordered::detail::compressed_base<T, Index>,
+            boost::unordered::detail::uncompressed_base<T, Index>
+        >
+    {};
+    
+    template <typename T1, typename T2>
+    struct compressed
+      : private boost::unordered::detail::generate_base<T1, 1>::type,
+        private boost::unordered::detail::generate_base<T2, 2>::type
+    {
+        typedef typename generate_base<T1, 1>::type base1;
+        typedef typename generate_base<T2, 2>::type base2;
+
+        typedef T1 first_type;
+        typedef T2 second_type;
+        
+        first_type& first() {
+            return static_cast<base1*>(this)->get();
+        }
+
+        first_type const& first() const {
+            return static_cast<base1 const*>(this)->get();
+        }
+
+        second_type& second() {
+            return static_cast<base2*>(this)->get();
+        }
+
+        second_type const& second() const {
+            return static_cast<base2 const*>(this)->get();
+        }
+
+        template <typename First, typename Second>
+        compressed(First const& x1, Second const& x2)
+            : base1(x1), base2(x2) {}
+
+        compressed(compressed const& x)
+            : base1(x.first()), base2(x.second()) {}
+
+        compressed(compressed& x, move_tag m)
+            : base1(x.first(), m), base2(x.second(), m) {}
+
+        void assign(compressed const& x)
+        {
+            first() = x.first();
+            second() = x.second();
+        }
+
+        void move_assign(compressed& x)
+        {
+            first() = boost::move(x.first());
+            second() = boost::move(x.second());
+        }
+        
+        void swap(compressed& x)
+        {
+            boost::swap(first(), x.first());
+            boost::swap(second(), x.second());
+        }
+
+    private:
+        // Prevent assignment just to make use of assign or
+        // move_assign explicit.
+        compressed& operator=(compressed const&);
+    };
 }}}
 
 #endif
