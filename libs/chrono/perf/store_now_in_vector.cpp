@@ -15,7 +15,8 @@
 #include <unistd.h>
 #endif
 
-static const std::size_t size = 10000000;
+//static const std::size_t size = 10000000;
+  static const std::size_t size = 2000000;
 
 typedef boost::chrono::simple_stopwatch<boost::chrono::high_resolution_clock> Stopwatch;
 typedef boost::chrono::stopwatch_reporter<Stopwatch> Reporter;
@@ -49,6 +50,8 @@ void test()
   perf<Clock>(vec);
   Stopwatch::duration t2 = sw2.elapsed();
   std::cout <<" "<< (t2-t1)/size << std::endl;
+  std::cout <<" "<< t2 << std::endl;
+  std::cout <<" "<< t1 << std::endl;
   std::size_t cnt=0;
   for (int i=size-1; i>0; --i)
   {
@@ -133,12 +136,13 @@ int main() {
   std::cout << "process_cpu_clock " ;
   test<boost::chrono::process_cpu_clock>();
 #endif
-
+  std::cout << "system_clock ";
+  test<boost::chrono::system_clock>();
 #if 0
   std::cout << "times ";
   test2();
   std::cout << "clock ";
   test3();
 #endif
-  return 0;
+  return 1;
 }

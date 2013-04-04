@@ -30,15 +30,8 @@
 #include <boost/config.hpp>
 #include <boost/detail/workaround.hpp>
 
-// Some compilers support rvalue references and auto type deduction.
-// With these C++0x features, temporary collections can be bound to 
-// rvalue references and their lifetime is extended. No copy/move is needed.
-#if !defined(BOOST_NO_DECLTYPE) && !defined(BOOST_NO_RVALUE_REFERENCES)                          \
- && !(BOOST_WORKAROUND(__GNUC__, == 4) && (__GNUC_MINOR__ <= 4) && !defined(BOOST_INTEL) &&      \
-                                                                   !defined(BOOST_CLANG))
-# define BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
 // Some compilers let us detect even const-qualified rvalues at compile-time
-#elif !defined(BOOST_NO_RVALUE_REFERENCES)                                                       \
+#if !defined(BOOST_NO_CXX11_RVALUE_REFERENCES)                                                   \
  || BOOST_WORKAROUND(BOOST_MSVC, >= 1310) && !defined(_PREFAST_)                                 \
  || (BOOST_WORKAROUND(__GNUC__, == 4) && (__GNUC_MINOR__ <= 5) && !defined(BOOST_INTEL) &&       \
                                                                   !defined(BOOST_CLANG))         \
@@ -95,16 +88,11 @@
 #include <boost/utility/addressof.hpp>
 #include <boost/foreach_fwd.hpp>
 
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-# include <boost/type_traits/decay.hpp>
-# include <boost/type_traits/remove_const.hpp>
-# include <boost/type_traits/remove_cv.hpp>
-#endif
-
 #ifdef BOOST_FOREACH_RUN_TIME_CONST_RVALUE_DETECTION
 # include <new>
 # include <boost/aligned_storage.hpp>
 # include <boost/utility/enable_if.hpp>
+# include <boost/type_traits/remove_const.hpp>
 #endif
 
 namespace boost
@@ -240,7 +228,7 @@ template<typename T>
 inline boost::mpl::true_ *is_const_(T const &) { return 0; }
 #endif
 
-#ifdef BOOST_NO_RVALUE_REFERENCES
+#ifdef BOOST_NO_CXX11_RVALUE_REFERENCES
 template<typename T>
 inline boost::mpl::false_ *is_rvalue_(T &, int) { return 0; }
 
@@ -449,7 +437,6 @@ inline T (*&to_ptr(T (&)[N]))[N]
     static T (*t)[N] = 0;
     return t;
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // derefof
@@ -466,8 +453,13 @@ inline T &derefof(T *t)
     );
 }
 
+# define BOOST_FOREACH_DEREFOF(T) boost::foreach_detail_::derefof(*T)
+#else
+# define BOOST_FOREACH_DEREFOF(T) (*T)
+#endif
+
 #if defined(BOOST_FOREACH_COMPILE_TIME_CONST_RVALUE_DETECTION)                                  \
- && !defined(BOOST_NO_RVALUE_REFERENCES)
+ && !defined(BOOST_NO_CXX11_RVALUE_REFERENCES)
 ///////////////////////////////////////////////////////////////////////////////
 // Rvalue references makes it drop-dead simple to detect at compile time
 // whether an expression is an rvalue.
@@ -477,7 +469,7 @@ inline T &derefof(T *t)
     boost::foreach_detail_::is_rvalue_((COL), 0)
 
 #elif defined(BOOST_FOREACH_COMPILE_TIME_CONST_RVALUE_DETECTION)                                \
- && defined(BOOST_NO_RVALUE_REFERENCES)
+ && defined(BOOST_NO_CXX11_RVALUE_REFERENCES)
 ///////////////////////////////////////////////////////////////////////////////
 // Detect at compile-time whether an expression yields an rvalue or
 // an lvalue. This is rather non-standard, but some popular compilers
@@ -679,7 +671,7 @@ begin(auto_any_t col, type2type<T, C> *, boost::mpl::false_ *) // lvalue
     typedef BOOST_DEDUCED_TYPENAME type2type<T, C>::type type;
     typedef BOOST_DEDUCED_TYPENAME foreach_iterator<T, C>::type iterator;
     return auto_any<BOOST_DEDUCED_TYPENAME foreach_iterator<T, C>::type>(
-        iterator(boost::begin(derefof(auto_any_cast<type *, boost::mpl::false_>(col)))));
+        iterator(boost::begin(BOOST_FOREACH_DEREFOF((auto_any_cast<type *, boost::mpl::false_>(col))))));
 }
 
 #ifdef BOOST_FOREACH_RUN_TIME_CONST_RVALUE_DETECTION
@@ -701,29 +693,6 @@ begin(auto_any_t col, type2type<T *, C> *, boost::mpl::true_ *) // null-terminat
 }
 #endif
 
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-template<typename T>
-inline typename foreach_iterator<typename remove_const<T>::type, is_const<T> >::type
-begin(T &col)
-{
-    return boost::begin(col);
-}
-
-template<typename T>
-inline T *
-begin(T *&col)
-{
-    return col;
-}
-
-template<typename T>
-inline T *
-begin(T * const &col)
-{
-    return col;
-}
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////
 // end
 //
@@ -742,7 +711,7 @@ end(auto_any_t col, type2type<T, C> *, boost::mpl::false_ *) // lvalue
     typedef BOOST_DEDUCED_TYPENAME type2type<T, C>::type type;
     typedef BOOST_DEDUCED_TYPENAME foreach_iterator<T, C>::type iterator;
     return auto_any<BOOST_DEDUCED_TYPENAME foreach_iterator<T, C>::type>(
-        iterator(boost::end(derefof(auto_any_cast<type *, boost::mpl::false_>(col)))));
+        iterator(boost::end(BOOST_FOREACH_DEREFOF((auto_any_cast<type *, boost::mpl::false_>(col))))));
 }
 
 #ifdef BOOST_FOREACH_RUN_TIME_CONST_RVALUE_DETECTION
@@ -764,33 +733,6 @@ end(auto_any_t, type2type<T *, C> *, boost::mpl::true_ *) // null-terminated C-s
 }
 #endif
 
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-template<typename T>
-inline typename foreach_iterator<typename remove_const<T>::type, is_const<T> >::type
-end(T &col)
-{
-    return boost::end(col);
-}
-
-struct cstr_end_iterator
-{
-};
-
-template<typename T>
-inline cstr_end_iterator
-end(T *&col)
-{
-    return cstr_end_iterator();
-}
-
-template<typename T>
-inline cstr_end_iterator
-end(T * const &col)
-{
-    return cstr_end_iterator();
-}
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////
 // done
 //
@@ -808,15 +750,6 @@ inline bool done(auto_any_t cur, auto_any_t, type2type<T *, C> *) // null-termin
     return ! *auto_any_cast<T *, boost::mpl::false_>(cur);
 }
 #endif
-
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-template<typename Iterator>
-inline bool operator !=(Iterator cur, cstr_end_iterator)
-{
-    return *cur != 0;
-}
-#endif
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // next
@@ -857,7 +790,7 @@ rbegin(auto_any_t col, type2type<T, C> *, boost::mpl::false_ *) // lvalue
     typedef BOOST_DEDUCED_TYPENAME type2type<T, C>::type type;
     typedef BOOST_DEDUCED_TYPENAME foreach_reverse_iterator<T, C>::type iterator;
     return auto_any<BOOST_DEDUCED_TYPENAME foreach_reverse_iterator<T, C>::type>(
-        iterator(boost::rbegin(derefof(auto_any_cast<type *, boost::mpl::false_>(col)))));
+        iterator(boost::rbegin(BOOST_FOREACH_DEREFOF((auto_any_cast<type *, boost::mpl::false_>(col))))));
 }
 
 #ifdef BOOST_FOREACH_RUN_TIME_CONST_RVALUE_DETECTION
@@ -882,35 +815,6 @@ rbegin(auto_any_t col, type2type<T *, C> *, boost::mpl::true_ *) // null-termina
 }
 #endif
 
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-template<typename T>
-inline typename foreach_reverse_iterator<typename remove_const<T>::type, is_const<T> >::type
-rbegin(T &col)
-{
-    return boost::rbegin(col);
-}
-
-template<typename T>
-inline reverse_iterator<T *>
-rbegin(T *&col)
-{
-    T *p = col;
-    while(0 != *p)
-        ++p;
-    return reverse_iterator<T *>(p);
-}
-
-template<typename T>
-inline reverse_iterator<T *>
-rbegin(T * const &col)
-{
-    T *p = col;
-    while(0 != *p)
-        ++p;
-    return reverse_iterator<T *>(p);
-}
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////
 // rend
 //
@@ -929,7 +833,7 @@ rend(auto_any_t col, type2type<T, C> *, boost::mpl::false_ *) // lvalue
     typedef BOOST_DEDUCED_TYPENAME type2type<T, C>::type type;
     typedef BOOST_DEDUCED_TYPENAME foreach_reverse_iterator<T, C>::type iterator;
     return auto_any<BOOST_DEDUCED_TYPENAME foreach_reverse_iterator<T, C>::type>(
-        iterator(boost::rend(derefof(auto_any_cast<type *, boost::mpl::false_>(col)))));
+        iterator(boost::rend(BOOST_FOREACH_DEREFOF((auto_any_cast<type *, boost::mpl::false_>(col))))));
 }
 
 #ifdef BOOST_FOREACH_RUN_TIME_CONST_RVALUE_DETECTION
@@ -949,29 +853,6 @@ rend(auto_any_t col, type2type<T *, C> *, boost::mpl::true_ *) // null-terminate
 {
     return auto_any<reverse_iterator<T *> >(
         reverse_iterator<T *>(auto_any_cast<T *, boost::mpl::false_>(col)));
-}
-#endif
-
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-template<typename T>
-inline typename foreach_reverse_iterator<typename remove_const<T>::type, is_const<T> >::type
-rend(T &col)
-{
-    return boost::rend(col);
-}
-
-template<typename T>
-inline reverse_iterator<T *>
-rend(T *&col)
-{
-    return reverse_iterator<T *>(col);
-}
-
-template<typename T>
-inline reverse_iterator<T *>
-rend(T * const &col)
-{
-    return reverse_iterator<T *>(col);
 }
 #endif
 
@@ -1045,40 +926,10 @@ rderef(auto_any_t cur, type2type<T, C> *)
             boost::foreach_detail_::to_ptr(COL)                                                 \
           , boost_foreach_argument_dependent_lookup_hack_value))
 
-///////////////////////////////////////////////////////////////////////////////
-// R-values and const R-values are bound to rvalue references
-///////////////////////////////////////////////////////////////////////////////
-#if defined(BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING)
-# define BOOST_FOREACH_PREAMBLE()                                                               \
-    BOOST_FOREACH_SUPPRESS_WARNINGS()
-
-namespace boost { namespace foreach_detail_
-{
-    template<typename T>
-    typename remove_cv<typename decay<T>::type>::type decay_copy(T &&);
-    
-    template<typename T>
-    T const add_const_if_rvalue(T &&);
-}}
-# define BOOST_FOREACH_AUTO_OBJECT(NAME, EXPR)                                                                    \
-    if (bool BOOST_PP_CAT(NAME, _defined) = false) {} else                                                        \
-    for (decltype(boost::foreach_detail_::decay_copy(EXPR)) NAME = (EXPR);                                        \
-        !BOOST_PP_CAT(NAME, _defined); BOOST_PP_CAT(NAME, _defined) = true)
-
-// If EXPR is an rvalue, bind it to a const rvalue reference.
-# define BOOST_FOREACH_AUTO_REF_REF(NAME, EXPR)                                                                   \
-    if (bool BOOST_PP_CAT(NAME, _defined) = false) {} else                                                        \
-    for (decltype(boost::foreach_detail_::add_const_if_rvalue(EXPR)) &&NAME = (EXPR);                             \
-        !BOOST_PP_CAT(NAME, _defined); BOOST_PP_CAT(NAME, _defined) = true)
-
-#elif defined(BOOST_FOREACH_COMPILE_TIME_CONST_RVALUE_DETECTION)
+#if defined(BOOST_FOREACH_COMPILE_TIME_CONST_RVALUE_DETECTION)
 ///////////////////////////////////////////////////////////////////////////////
 // R-values and const R-values supported here with zero runtime overhead
 ///////////////////////////////////////////////////////////////////////////////
-# define BOOST_FOREACH_PREAMBLE()                                                               \
-    BOOST_FOREACH_SUPPRESS_WARNINGS()
-
-
 
 // No variable is needed to track the rvalue-ness of the collection expression
 # define BOOST_FOREACH_PREAMBLE()                                                               \
@@ -1108,7 +959,7 @@ namespace boost { namespace foreach_detail_
     (true ? boost::foreach_detail_::make_probe((COL), BOOST_FOREACH_ID(_foreach_is_rvalue)) : (COL))
 
 // The rvalue/lvalue-ness of the collection expression is determined dynamically, unless
-// type type is an array or is noncopyable or is non-const, in which case we know it's an lvalue.
+// the type is an array or is noncopyable or is non-const, in which case we know it's an lvalue.
 // If the type happens to be a lightweight proxy, always make a copy.
 # define BOOST_FOREACH_SHOULD_COPY(COL)                                                         \
     (boost::foreach_detail_::should_copy_impl(                                                  \
@@ -1245,28 +1096,7 @@ namespace boost { namespace foreach_detail_
 //   BOOST_FOREACH(i, int_list)
 //       { ... }
 //
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-# define BOOST_FOREACH(VAR, COL)                                                                \
-    BOOST_FOREACH_PREAMBLE()                                                                    \
-    BOOST_FOREACH_AUTO_REF_REF(                                                                 \
-        BOOST_FOREACH_ID(_foreach_col)                                                          \
-      , COL)                                                                                    \
-    BOOST_FOREACH_AUTO_OBJECT(                                                                  \
-        BOOST_FOREACH_ID(_foreach_cur)                                                          \
-      , boost::foreach_detail_::begin(BOOST_FOREACH_ID(_foreach_col)))                          \
-    BOOST_FOREACH_AUTO_OBJECT(                                                                  \
-        BOOST_FOREACH_ID(_foreach_end)                                                          \
-      , boost::foreach_detail_::end(BOOST_FOREACH_ID(_foreach_col)))                            \
-    for (bool BOOST_FOREACH_ID(_foreach_continue) = true;                                       \
-              BOOST_FOREACH_ID(_foreach_continue)                                               \
-               && BOOST_FOREACH_ID(_foreach_cur) != BOOST_FOREACH_ID(_foreach_end);             \
-              BOOST_FOREACH_ID(_foreach_continue)                                               \
-                ? (void)++BOOST_FOREACH_ID(_foreach_cur) : (void)0)                             \
-        if ( (BOOST_FOREACH_ID(_foreach_continue) = false) ) {} else                            \
-        for (VAR = *BOOST_FOREACH_ID(_foreach_cur);                                             \
-                   !BOOST_FOREACH_ID(_foreach_continue); BOOST_FOREACH_ID(_foreach_continue) = true)
-#else
-# define BOOST_FOREACH(VAR, COL)                                                                                  \
+#define BOOST_FOREACH(VAR, COL)                                                                                   \
     BOOST_FOREACH_PREAMBLE()                                                                                      \
     if (boost::foreach_detail_::auto_any_t BOOST_FOREACH_ID(_foreach_col) = BOOST_FOREACH_CONTAIN(COL)) {} else   \
     if (boost::foreach_detail_::auto_any_t BOOST_FOREACH_ID(_foreach_cur) = BOOST_FOREACH_BEGIN(COL)) {} else     \
@@ -1276,7 +1106,6 @@ namespace boost { namespace foreach_detail_
               BOOST_FOREACH_ID(_foreach_continue) ? BOOST_FOREACH_NEXT(COL) : (void)0)                            \
         if  (boost::foreach_detail_::set_false(BOOST_FOREACH_ID(_foreach_continue))) {} else                      \
         for (VAR = BOOST_FOREACH_DEREF(COL); !BOOST_FOREACH_ID(_foreach_continue); BOOST_FOREACH_ID(_foreach_continue) = true)
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // BOOST_REVERSE_FOREACH
@@ -1285,28 +1114,7 @@ namespace boost { namespace foreach_detail_
 //   all other respects, BOOST_REVERSE_FOREACH is like
 //   BOOST_FOREACH.
 //
-#ifdef BOOST_FOREACH_USE_RVALUE_REFERENCE_BINDING
-# define BOOST_REVERSE_FOREACH(VAR, COL)                                                        \
-    BOOST_FOREACH_PREAMBLE()                                                                    \
-    BOOST_FOREACH_AUTO_REF_REF(                                                                 \
-        BOOST_FOREACH_ID(_foreach_col)                                                          \
-      , COL)                                                                                    \
-    BOOST_FOREACH_AUTO_OBJECT(                                                                  \
-        BOOST_FOREACH_ID(_foreach_cur)                                                          \
-      , boost::foreach_detail_::rbegin(BOOST_FOREACH_ID(_foreach_col)))                         \
-    BOOST_FOREACH_AUTO_OBJECT(                                                                  \
-        BOOST_FOREACH_ID(_foreach_end)                                                          \
-      , boost::foreach_detail_::rend(BOOST_FOREACH_ID(_foreach_col)))                           \
-    for (bool BOOST_FOREACH_ID(_foreach_continue) = true;                                       \
-              BOOST_FOREACH_ID(_foreach_continue)                                               \
-               && BOOST_FOREACH_ID(_foreach_cur) != BOOST_FOREACH_ID(_foreach_end);             \
-              BOOST_FOREACH_ID(_foreach_continue)                                               \
-                ? (void)++BOOST_FOREACH_ID(_foreach_cur) : (void)0)                             \
-        if ( (BOOST_FOREACH_ID(_foreach_continue) = false) ) {} else                            \
-        for (VAR = *BOOST_FOREACH_ID(_foreach_cur);                                             \
-                   !BOOST_FOREACH_ID(_foreach_continue); BOOST_FOREACH_ID(_foreach_continue) = true)
-#else
-# define BOOST_REVERSE_FOREACH(VAR, COL)                                                                          \
+#define BOOST_REVERSE_FOREACH(VAR, COL)                                                                           \
     BOOST_FOREACH_PREAMBLE()                                                                                      \
     if (boost::foreach_detail_::auto_any_t BOOST_FOREACH_ID(_foreach_col) = BOOST_FOREACH_CONTAIN(COL)) {} else   \
     if (boost::foreach_detail_::auto_any_t BOOST_FOREACH_ID(_foreach_cur) = BOOST_FOREACH_RBEGIN(COL)) {} else    \
@@ -1316,6 +1124,5 @@ namespace boost { namespace foreach_detail_
               BOOST_FOREACH_ID(_foreach_continue) ? BOOST_FOREACH_RNEXT(COL) : (void)0)                           \
         if  (boost::foreach_detail_::set_false(BOOST_FOREACH_ID(_foreach_continue))) {} else                      \
         for (VAR = BOOST_FOREACH_RDEREF(COL); !BOOST_FOREACH_ID(_foreach_continue); BOOST_FOREACH_ID(_foreach_continue) = true)
-#endif
 
 #endif

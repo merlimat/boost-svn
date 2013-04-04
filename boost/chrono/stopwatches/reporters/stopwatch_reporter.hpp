@@ -8,6 +8,8 @@
 #ifndef BOOST_CHRONO_STOPWATCHES_REPORTERS_STOPWATCH_REPORTER_HPP
 #define BOOST_CHRONO_STOPWATCHES_REPORTERS_STOPWATCH_REPORTER_HPP
 
+#include <boost/chrono/config.hpp>
+
 #if !defined(BOOST_ENABLE_WARNINGS) && !defined(BOOST_CHRONO_ENABLE_WARNINGS)
 #if defined __GNUC__
 #pragma GCC system_header
@@ -22,7 +24,7 @@
 #include <boost/chrono/stopwatches/stopwatch_scoped.hpp>
 #include <boost/chrono/stopwatches/dont_start.hpp>
 #include <boost/chrono/chrono.hpp>
-#include <boost/system/error_code.hpp>
+#include <boost/chrono/detail/system.hpp>
 #include <boost/cstdint.hpp>
 #include <cassert>
 
@@ -31,13 +33,13 @@ namespace boost
   namespace chrono
   {
 
-    template<class Stopwatch, class Formatter>
+    template<class CharT, class Stopwatch, class Formatter=basic_stopwatch_reporter_default_formatter<CharT, Stopwatch> >
     class basic_stopwatch_reporter: public Stopwatch
     {
     public:
       typedef Stopwatch base_type;
       typedef typename Stopwatch::clock clock;
-      typedef Stopwatch stopwatch;
+      typedef Stopwatch stopwatch_type;
       typedef Formatter formatter_type;
 
       basic_stopwatch_reporter() BOOST_NOEXCEPT :
@@ -112,25 +114,23 @@ namespace boost
 
 
     template<class Stopwatch,
-        class Formatter = typename stopwatch_reporter_default_formatter<
-            Stopwatch>::type>
+        class Formatter = typename basic_stopwatch_reporter_default_formatter<char, Stopwatch>::type>
     class stopwatch_reporter;
 
     template<class Stopwatch, class Formatter>
-    struct stopwatch_reporter_default_formatter<stopwatch_reporter<Stopwatch,
-        Formatter> >
+    struct basic_stopwatch_reporter_default_formatter<char, stopwatch_reporter<Stopwatch, Formatter> >
     {
       typedef Formatter type;
     };
 
     template<class Stopwatch, class Formatter>
-    class stopwatch_reporter: public basic_stopwatch_reporter<Stopwatch,
+    class stopwatch_reporter: public basic_stopwatch_reporter<char, Stopwatch,
         Formatter>
     {
-      typedef basic_stopwatch_reporter<Stopwatch, Formatter> base_type;
+      typedef basic_stopwatch_reporter<char, Stopwatch, Formatter> base_type;
     public:
       typedef typename Stopwatch::clock clock;
-      typedef Stopwatch stopwatch;
+      typedef Stopwatch stopwatch_type;
       typedef Formatter formatter_type;
 
       stopwatch_reporter()
@@ -179,25 +179,23 @@ namespace boost
     };
 
     template<class Stopwatch,
-        class Formatter = typename wstopwatch_reporter_default_formatter<
+        class Formatter = typename basic_stopwatch_reporter_default_formatter<wchar_t,
             Stopwatch>::type>
     class wstopwatch_reporter;
 
     template<class Stopwatch, class Formatter>
-    struct wstopwatch_reporter_default_formatter<wstopwatch_reporter<
-        Stopwatch, Formatter> >
+    struct basic_stopwatch_reporter_default_formatter<wchar_t, wstopwatch_reporter<Stopwatch, Formatter> >
     {
       typedef Formatter type;
     };
 
     template<class Stopwatch, class Formatter>
-    class wstopwatch_reporter: public basic_stopwatch_reporter<Stopwatch,
-        Formatter>
+    class wstopwatch_reporter: public basic_stopwatch_reporter<wchar_t, Stopwatch, Formatter>
     {
-      typedef basic_stopwatch_reporter<Stopwatch, Formatter> base_type;
+      typedef basic_stopwatch_reporter<wchar_t, Stopwatch, Formatter> base_type;
     public:
       typedef typename Stopwatch::clock clock;
-      typedef Stopwatch stopwatch;
+      typedef Stopwatch stopwatch_type;
       typedef Formatter formatter_type;
 
       wstopwatch_reporter() :
@@ -221,7 +219,14 @@ namespace boost
         base_type(fmt)
       {
       }
-
+      explicit wstopwatch_reporter(const typename Formatter::char_type* fmt) :
+        base_type(fmt)
+      {
+      }
+      explicit wstopwatch_reporter(typename Formatter::string_type const& fmt) :
+        base_type(fmt)
+      {
+      }
       typedef stopwatch_runner<wstopwatch_reporter<Stopwatch, Formatter> >
           scoped_run;
       typedef stopwatch_stopper<wstopwatch_reporter<Stopwatch, Formatter> >
@@ -233,7 +238,6 @@ namespace boost
 
     protected:
 
-      //wstopwatch_reporter(); // = delete;
       wstopwatch_reporter(const wstopwatch_reporter&); // = delete;
       wstopwatch_reporter& operator=(const wstopwatch_reporter&); // = delete;
     };

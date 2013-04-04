@@ -1,8 +1,8 @@
 // Boost.Geometry (aka GGL, Generic Geometry Library)
 
-// Copyright (c) 2007-2011 Barend Gehrels, Amsterdam, the Netherlands.
-// Copyright (c) 2008-2011 Bruno Lalande, Paris, France.
-// Copyright (c) 2009-2011 Mateusz Loskot, London, UK.
+// Copyright (c) 2007-2012 Barend Gehrels, Amsterdam, the Netherlands.
+// Copyright (c) 2008-2012 Bruno Lalande, Paris, France.
+// Copyright (c) 2009-2012 Mateusz Loskot, London, UK.
 
 // Parts of Boost.Geometry are redesigned from Geodan's Geographic Library
 // (geolib/GGL), copyright (c) 1995-2010 Geodan, Amsterdam, the Netherlands.
@@ -17,7 +17,7 @@
 #include <boost/math/constants/constants.hpp>
 
 #include <boost/geometry/algorithms/area.hpp>
-
+#include <boost/geometry/extensions/nsphere/core/radius.hpp>
 #include <boost/geometry/extensions/nsphere/core/tags.hpp>
 
 
@@ -29,7 +29,7 @@ namespace boost { namespace geometry
 namespace detail { namespace area
 {
 
-template<typename C, typename S>
+template<typename C>
 struct circle_area
 {
     typedef typename coordinate_type<C>::type coordinate_type;
@@ -42,6 +42,7 @@ struct circle_area
                 coordinate_type
             >::type return_type;
 
+    template <typename S>
     static inline return_type apply(C const& c, S const&)
     {
         // Currently only works for Cartesian circles
@@ -66,9 +67,9 @@ namespace dispatch
 {
 
 
-template <typename Geometry, typename Strategy>
-struct area<nsphere_tag, Geometry, Strategy>
-    : detail::area::circle_area<Geometry, Strategy>
+template <typename Geometry>
+struct area<Geometry, nsphere_tag>
+    : detail::area::circle_area<Geometry>
 {};
 
 

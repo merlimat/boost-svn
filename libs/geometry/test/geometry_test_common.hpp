@@ -1,8 +1,8 @@
 // Boost.Geometry (aka GGL, Generic Geometry Library)
 
-// Copyright (c) 2007-2011 Barend Gehrels, Amsterdam, the Netherlands.
-// Copyright (c) 2008-2011 Bruno Lalande, Paris, France.
-// Copyright (c) 2009-2011 Mateusz Loskot, London, UK.
+// Copyright (c) 2007-2012 Barend Gehrels, Amsterdam, the Netherlands.
+// Copyright (c) 2008-2012 Bruno Lalande, Paris, France.
+// Copyright (c) 2009-2012 Mateusz Loskot, London, UK.
 
 // Parts of Boost.Geometry are redesigned from Geodan's Geographic Library
 // (geolib/GGL), copyright (c) 1995-2010 Geodan, Amsterdam, the Netherlands.
@@ -89,6 +89,9 @@ template <> struct string_from_type<double>
 template <> struct string_from_type<long double>
 { static std::string name() { return "e"; }  };
 
+template <> struct string_from_type<int>
+{ static std::string name() { return "i"; }  };
+
 #if defined(HAVE_TTMATH)
     template <> struct string_from_type<ttmath_big>
     { static std::string name() { return "t"; }  };
@@ -111,11 +114,11 @@ template <typename T> struct string_from_type<boost::rational<T> >
 #endif
 
 
-template <typename CoordinateType, typename T>
-inline T if_typed_tt(T value_tt, T value)
+template <typename CoordinateType, typename T1, typename T2>
+inline T1 if_typed_tt(T1 value_tt, T2 value)
 {
 #if defined(HAVE_TTMATH)
-    return boost::is_same<CoordinateType, ttmath_big>::value ? value_tt : value;
+    return boost::is_same<CoordinateType, ttmath_big>::type::value ? value_tt : value;
 #else
     return value;
 #endif

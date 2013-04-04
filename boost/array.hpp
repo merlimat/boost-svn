@@ -13,6 +13,7 @@
  * accompanying file LICENSE_1_0.txt or copy at
  * http://www.boost.org/LICENSE_1_0.txt)
  *
+ * 14 Apr 2012 - (mtc) Added support for boost::hash
  * 28 Dec 2010 - (mtc) Added cbegin and cend (and crbegin and crend) for C++Ox compatibility.
  * 10 Mar 2010 - (mtc) fill method added, matching resolution of the standard library working group.
  *      See <http://www.open-std.org/jtc1/sc22/wg21/docs/lwg-defects.html#776> or Trac issue #3168
@@ -41,11 +42,13 @@
 #include <cstddef>
 #include <stdexcept>
 #include <boost/assert.hpp>
+#include <boost/static_assert.hpp>
 #include <boost/swap.hpp>
 
 // Handles broken standard libraries better than <iterator>
 #include <boost/detail/iterator.hpp>
 #include <boost/throw_exception.hpp>
+#include <boost/functional/hash_fwd.hpp>
 #include <algorithm>
 
 // FIXES for broken compilers
@@ -118,13 +121,13 @@ namespace boost {
         // operator[]
         reference operator[](size_type i) 
         { 
-            BOOST_ASSERT( i < N && "out of range" ); 
+            BOOST_ASSERT_MSG( i < N, "out of range" );
             return elems[i];
         }
         
         const_reference operator[](size_type i) const 
         {     
-            BOOST_ASSERT( i < N && "out of range" ); 
+            BOOST_ASSERT_MSG( i < N, "out of range" );
             return elems[i]; 
         }
 
@@ -427,8 +430,43 @@ namespace boost {
     }
 #endif
 
+
+    template<class T, std::size_t N>
+    std::size_t hash_value(const array<T,N>& arr)
+    {
+        return boost::hash_range(arr.begin(), arr.end());
+    }
+
+   template <size_t Idx, typename T, size_t N>
+   T &get(boost::array<T,N> &arr) BOOST_NOEXCEPT {
+       BOOST_STATIC_ASSERT_MSG ( Idx < N, "boost::get<>(boost::array &) index out of range" );
+       return arr[Idx];
+       }
+    
+   template <size_t Idx, typename T, size_t N>
+   const T &get(const boost::array<T,N> &arr) BOOST_NOEXCEPT {
+       BOOST_STATIC_ASSERT_MSG ( Idx < N, "boost::get<>(const boost::array &) index out of range" );
+       return arr[Idx];
+       }
+
 } /* namespace boost */
 
+#ifndef BOOST_NO_CXX11_HDR_ARRAY
+//  If we don't have std::array, I'm assuming that we don't have std::get
+namespace std {
+   template <size_t Idx, typename T, size_t N>
+   T &get(boost::array<T,N> &arr) BOOST_NOEXCEPT {
+       BOOST_STATIC_ASSERT_MSG ( Idx < N, "std::get<>(boost::array &) index out of range" );
+       return arr[Idx];
+       }
+    
+   template <size_t Idx, typename T, size_t N>
+   const T &get(const boost::array<T,N> &arr) BOOST_NOEXCEPT {
+       BOOST_STATIC_ASSERT_MSG ( Idx < N, "std::get<>(const boost::array &) index out of range" );
+       return arr[Idx];
+       }
+}
+#endif
 
 #if BOOST_WORKAROUND(BOOST_MSVC, >= 1400)  
 # pragma warning(pop)  

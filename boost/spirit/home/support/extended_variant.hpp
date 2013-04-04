@@ -43,6 +43,10 @@ namespace boost { namespace spirit
         extended_variant(T const& var)
             : var(var) {}
 
+        template <typename T>
+        extended_variant(T& var)
+            : var(var) {}
+
         template <typename F>
         typename F::result_type apply_visitor(F const& v)
         {
@@ -80,5 +84,36 @@ namespace boost { namespace spirit
         variant_type var;
     };
 }}
+
+namespace boost
+{
+    template <typename T, BOOST_VARIANT_ENUM_PARAMS(typename T)>
+    inline T const&
+    get(boost::spirit::extended_variant<BOOST_VARIANT_ENUM_PARAMS(T)> const& x)
+    {
+        return boost::get<T>(x.get());
+    }
+
+    template <typename T, BOOST_VARIANT_ENUM_PARAMS(typename T)>
+    inline T&
+    get(boost::spirit::extended_variant<BOOST_VARIANT_ENUM_PARAMS(T)>& x)
+    {
+        return boost::get<T>(x.get());
+    }
+
+    template <typename T, BOOST_VARIANT_ENUM_PARAMS(typename T)>
+    inline T const*
+    get(boost::spirit::extended_variant<BOOST_VARIANT_ENUM_PARAMS(T)> const* x)
+    {
+        return boost::get<T>(&x->get());
+    }
+
+    template <typename T, BOOST_VARIANT_ENUM_PARAMS(typename T)>
+    inline T*
+    get(boost::spirit::extended_variant<BOOST_VARIANT_ENUM_PARAMS(T)>* x)
+    {
+        return boost::get<T>(&x->get());
+    }
+}
 
 #endif

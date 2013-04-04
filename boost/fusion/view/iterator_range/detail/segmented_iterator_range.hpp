@@ -21,6 +21,8 @@
 #include <boost/fusion/iterator/equal_to.hpp>
 #include <boost/fusion/container/list/detail/reverse_cons.hpp>
 #include <boost/fusion/iterator/detail/segment_sequence.hpp>
+#include <boost/fusion/support/is_sequence.hpp>
+#include <boost/utility/enable_if.hpp>
 
 //  Invariants:
 //  - Each segmented iterator has a stack
@@ -29,11 +31,36 @@
 //  - All other ranges point to ranges
 //  - The front of each range in the stack (besides the
 //    topmost) is the range above it
-  
+
 namespace boost { namespace fusion
 {
     template <typename First, typename Last>
     struct iterator_range;
+
+    namespace result_of
+    {
+        template <typename Sequence, typename T>
+        struct push_back;
+
+        template <typename Sequence, typename T>
+        struct push_front;
+    }
+
+    template <typename Sequence, typename T>
+    typename
+        lazy_enable_if<
+            traits::is_sequence<Sequence>
+          , result_of::push_back<Sequence const, T>
+        >::type
+    push_back(Sequence const& seq, T const& x);
+
+    template <typename Sequence, typename T>
+    typename
+        lazy_enable_if<
+            traits::is_sequence<Sequence>
+          , result_of::push_front<Sequence const, T>
+        >::type
+    push_front(Sequence const& seq, T const& x);
 }}
 
 namespace boost { namespace fusion { namespace detail
@@ -43,7 +70,7 @@ namespace boost { namespace fusion { namespace detail
     //  switch (size(stack_begin))
     //  {
     //  case 1:
-    //    return nil;
+    //    return nil_;
     //  case 2:
     //    // car(cdr(stack_begin)) is a range over values.
     //    assert(end(front(car(stack_begin))) == end(car(cdr(stack_begin))));
@@ -117,7 +144,7 @@ namespace boost { namespace fusion { namespace detail
             segment_sequence<
                 typename result_of::push_front<
                     rest_type const
-                  , typename recurse::type 
+                  , typename recurse::type
                 >::type
             >
         type;
@@ -178,20 +205,20 @@ namespace boost { namespace fusion { namespace detail
     template <typename Stack>
     struct make_segment_sequence_front<Stack, 1>
     {
-        typedef typename Stack::cdr_type type; // nil
+        typedef typename Stack::cdr_type type; // nil_
 
         static type call(Stack const &stack)
         {
             return stack.cdr;
         }
-    };    
+    };
 
     //auto make_segment_sequence_back(stack_end)
     //{
     //  switch (size(stack_end))
     //  {
     //  case 1:
-    //    return nil;
+    //    return nil_;
     //  case 2:
     //    // car(cdr(stack_back)) is a range over values.
     //    assert(end(front(car(stack_end))) == end(car(cdr(stack_end))));
@@ -260,7 +287,7 @@ namespace boost { namespace fusion { namespace detail
             segment_sequence<
                 typename result_of::push_back<
                     rest_type const
-                  , typename recurse::type 
+                  , typename recurse::type
                 >::type
             >
         type;
@@ -321,14 +348,14 @@ namespace boost { namespace fusion { namespace detail
     template <typename Stack>
     struct make_segment_sequence_back<Stack, 1>
     {
-        typedef typename Stack::cdr_type type; // nil
+        typedef typename Stack::cdr_type type; // nil_
 
         static type call(Stack const& stack)
         {
             return stack.cdr;
         }
     };
-    
+
     //auto make_segmented_range_reduce(stack_begin, stack_end)
     //{
     //  if (size(stack_begin) == 1 && size(stack_end) == 1)
@@ -373,7 +400,7 @@ namespace boost { namespace fusion { namespace detail
     template <
         typename StackBegin
       , typename StackEnd
-      , bool SameSegment = 
+      , bool SameSegment =
             result_of::equal_to<
                 typename StackBegin::car_type::begin_type
               , typename StackEnd::car_type::begin_type

@@ -1,4 +1,4 @@
-//  boost/chrono/stopwatches/stopwatch_formatter.hpp  ------------------------------------------------------------//
+//  boost/chrono/stopwatches/formatters/elapsed_formatter.hpp  ------------------------------------------------------------//
 //  Copyright 2011 Vicente J. Botet Escriba
 //  Distributed under the Boost Software License, Version 1.0.
 //  See http://www.boost.org/LICENSE_1_0.txt
@@ -8,9 +8,8 @@
 #define BOOST_CHRONO_STOPWATCHES_FORMATTERS_ELAPSED_HPP
 
 #include <boost/chrono/stopwatches/formatters/base_formatter.hpp>
-#include <boost/system/error_code.hpp>
+#include <boost/chrono/chrono_io.hpp>
 #include <boost/current_function.hpp>
-//#include <boost/chrono/stopwatches/detail/adaptive_string.hpp>
 #include <boost/format.hpp>
 #include <boost/format/group.hpp>
 #include <boost/cstdint.hpp>
@@ -27,7 +26,7 @@ namespace boost
   namespace chrono
   {
 
-    template<typename Ratio = milli, typename CharT = char,
+    template<typename Ratio, typename CharT,
         typename Traits = std::char_traits<CharT>,
         class Alloc = std::allocator<CharT> >
     class basic_elapsed_formatter: public base_formatter<CharT, Traits>, public basic_format<CharT, Traits>
@@ -80,6 +79,7 @@ namespace boost
         if (d < duration_t::zero())
           return;
 
+        duration_style_io_saver dsios(this->os_);
         this->os_ << static_cast<format_type&>(*this)
             % io::group(std::fixed, std::setprecision(this->precision_), duration_fmt(this->duration_style_), boost::chrono::duration<
                     double, Ratio>(d))

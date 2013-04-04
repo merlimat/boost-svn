@@ -1,7 +1,7 @@
 // Boost.Geometry (aka GGL, Generic Geometry Library)
 // Unit Test
 
-// Copyright (c) 2007-2011 Barend Gehrels, Amsterdam, the Netherlands.
+// Copyright (c) 2007-2012 Barend Gehrels, Amsterdam, the Netherlands.
 
 // Use, modification and distribution is subject to the Boost Software License,
 // Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
@@ -34,7 +34,7 @@
 
 #include <boost/geometry/multi/views/detail/range_type.hpp>
 
-#include <boost/geometry/domains/gis/io/wkt/read_wkt_multi.hpp>
+#include <boost/geometry/multi/io/wkt/read.hpp>
 
 
 #include "multi_overlay_cases.hpp"
@@ -386,7 +386,7 @@ void test_geometries()
 
     test_traverse_union::apply
         (
-            "case_recursive_boxes_3", 8, 49.5,
+            "case_recursive_boxes_3", 7, 49.5,
             case_recursive_boxes_3[0], case_recursive_boxes_3[1]
         );
 

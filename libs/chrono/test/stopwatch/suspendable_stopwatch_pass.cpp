@@ -1,23 +1,16 @@
-//===----------------------------------------------------------------------===//
-//
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
-//
-//===----------------------------------------------------------------------===//
-//  Adaptation to Boost of the libcxx
-//  Copyright 2010 Vicente J. Botet Escriba
+//  Copyright 2010-2011 Vicente J. Botet Escriba
 //  Distributed under the Boost Software License, Version 1.0.
 //  See http://www.boost.org/LICENSE_1_0.txt
+
+#define BOOST_CHRONO_VERSION 2
 
 #include <iostream>
 #include <boost/type_traits/is_same.hpp>
 #include <boost/chrono/stopwatches/suspendable_stopwatch.hpp>
-#include <libs/chrono/test/cycle_count.hpp>
+#include "../cycle_count.hpp"
 #include <boost/detail/lightweight_test.hpp>
 
-#if !defined(BOOST_NO_STATIC_ASSERT)
+#if !defined(BOOST_NO_CXX11_STATIC_ASSERT)
 #define NOTHING ""
 #endif
 

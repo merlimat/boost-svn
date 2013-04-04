@@ -1,85 +1,359 @@
-//  chrono_io
-//
 //  (C) Copyright Howard Hinnant
 //  (C) Copyright 2010-2011 Vicente J. Botet Escriba
 //  Use, modification and distribution are subject to the Boost Software License,
 //  Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
 //  http://www.boost.org/LICENSE_1_0.txt).
+
+//===-------------------------- locale ------------------------------------===//
 //
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+
 // This code was adapted by Vicente from Howard Hinnant's experimental work
-// on chrono i/o to Boost
+// on chrono i/o to Boost and some functions from libc++/locale to emulate the missing time_get::get()
 
 #ifndef BOOST_CHRONO_IO_TIME_POINT_IO_HPP
 #define BOOST_CHRONO_IO_TIME_POINT_IO_HPP
 
+#include <boost/chrono/io/time_point_put.hpp>
+#include <boost/chrono/io/time_point_get.hpp>
 #include <boost/chrono/io/duration_io.hpp>
-#include <boost/chrono/chrono.hpp>
-#include <locale>
-#include <boost/chrono/detail/scan_keyword.hpp>
-#include <boost/chrono/round.hpp>
-#include <boost/chrono/io/translate.hpp>
+#include <boost/chrono/io/ios_base_state.hpp>
+#include <boost/chrono/io/utility/manip_base.hpp>
+#include <boost/chrono/time_point.hpp>
 #include <boost/chrono/clock_string.hpp>
+#include <boost/chrono/round.hpp>
+#include <boost/chrono/detail/scan_keyword.hpp>
+#include <boost/detail/no_exceptions_support.hpp>
+#include <cstring>
+#include <locale>
+#include <string.h>
+
+#define  BOOST_CHRONO_INTERNAL_TIMEGM defined BOOST_WINDOWS && ! defined(__CYGWIN__)
+//#define  BOOST_CHRONO_INTERNAL_TIMEGM 1
+
+#define  BOOST_CHRONO_USES_INTERNAL_TIME_GET
 
 namespace boost
 {
-
   namespace chrono
   {
-
-    struct timezone
-    {
-      enum type
-      {
-        utc, local
-      };
-    };
-    typedef timezone::type timezone_type;
-
-    template<class CharT>
-    class time_punct: public std::locale::facet
-    {
-    public:
-      typedef std::basic_string<CharT> string_type;
-
-    private:
-      string_type fmt_;
-      chrono::timezone_type tz_;
-
-    public:
-      static std::locale::id id;
-
-      explicit time_punct(size_t refs = 0) :
-        std::locale::facet(refs), tz_(timezone::utc)
-      {
-      }
-
-      time_punct(timezone_type tz, string_type fmt, size_t refs = 0)
-      // todo use move semantic when available.
-      :
-        std::locale::facet(refs), fmt_(fmt), tz_(tz)
-      {
-      }
-
-      const string_type& fmt() const BOOST_NOEXCEPT
-      {
-        return fmt_;
-      }
-      chrono::timezone_type get_timezone() const BOOST_NOEXCEPT
-      {
-        return tz_;
-      }
-    };
-
-    template<class CharT>
-    std::locale::id time_punct<CharT>::id;
-
     namespace detail
     {
-      template<class CharT>
-      struct time_manip
+
+      template <class CharT, class InputIterator = std::istreambuf_iterator<CharT> >
+      struct time_get
+      {
+        std::time_get<CharT> const &that_;
+        time_get(std::time_get<CharT> const& that) : that_(that) {}
+
+        typedef std::time_get<CharT> facet;
+        typedef typename facet::iter_type iter_type;
+        typedef typename facet::char_type char_type;
+        typedef std::basic_string<char_type> string_type;
+
+        static int
+        get_up_to_n_digits(
+            InputIterator& b, InputIterator e,
+            std::ios_base::iostate& err,
+            const std::ctype<CharT>& ct,
+            int n)
+        {
+            // Precondition:  n >= 1
+            if (b == e)
+            {
+                err |= std::ios_base::eofbit | std::ios_base::failbit;
+                return 0;
+            }
+            // get first digit
+            CharT c = *b;
+            if (!ct.is(std::ctype_base::digit, c))
+            {
+                err |= std::ios_base::failbit;
+                return 0;
+            }
+            int r = ct.narrow(c, 0) - '0';
+            for (++b, --n; b != e && n > 0; ++b, --n)
+            {
+                // get next digit
+                c = *b;
+                if (!ct.is(std::ctype_base::digit, c))
+                    return r;
+                r = r * 10 + ct.narrow(c, 0) - '0';
+            }
+            if (b == e)
+                err |= std::ios_base::eofbit;
+            return r;
+        }
+
+
+        void get_day(
+            int& d,
+            iter_type& b, iter_type e,
+            std::ios_base::iostate& err,
+            const std::ctype<char_type>& ct) const
+        {
+            int t = get_up_to_n_digits(b, e, err, ct, 2);
+            if (!(err & std::ios_base::failbit) && 1 <= t && t <= 31)
+                d = t;
+            else
+                err |= std::ios_base::failbit;
+        }
+
+        void get_month(
+            int& m,
+            iter_type& b, iter_type e,
+            std::ios_base::iostate& err,
+            const std::ctype<char_type>& ct) const
+        {
+            int t = get_up_to_n_digits(b, e, err, ct, 2) - 1;
+            if (!(err & std::ios_base::failbit) && t <= 11)
+                m = t;
+            else
+                err |= std::ios_base::failbit;
+        }
+
+
+        void get_year4(int& y,
+                                                      iter_type& b, iter_type e,
+                                                      std::ios_base::iostate& err,
+                                                      const std::ctype<char_type>& ct) const
+        {
+            int t = get_up_to_n_digits(b, e, err, ct, 4);
+            if (!(err & std::ios_base::failbit))
+                y = t - 1900;
+        }
+
+        void
+        get_hour(int& h,
+                                                     iter_type& b, iter_type e,
+                                                     std::ios_base::iostate& err,
+                                                     const std::ctype<char_type>& ct) const
+        {
+            int t = get_up_to_n_digits(b, e, err, ct, 2);
+            if (!(err & std::ios_base::failbit) && t <= 23)
+                h = t;
+            else
+                err |= std::ios_base::failbit;
+        }
+
+        void
+        get_minute(int& m,
+                                                       iter_type& b, iter_type e,
+                                                       std::ios_base::iostate& err,
+                                                       const std::ctype<char_type>& ct) const
+        {
+            int t = get_up_to_n_digits(b, e, err, ct, 2);
+            if (!(err & std::ios_base::failbit) && t <= 59)
+                m = t;
+            else
+                err |= std::ios_base::failbit;
+        }
+
+        void
+        get_second(int& s,
+                                                       iter_type& b, iter_type e,
+                                                       std::ios_base::iostate& err,
+                                                       const std::ctype<char_type>& ct) const
+        {
+            int t = get_up_to_n_digits(b, e, err, ct, 2);
+            if (!(err & std::ios_base::failbit) && t <= 60)
+                s = t;
+            else
+                err |= std::ios_base::failbit;
+        }
+
+
+
+        InputIterator get(
+            iter_type b, iter_type e,
+            std::ios_base& iob,
+            std::ios_base::iostate& err,
+            std::tm* tm,
+            char fmt, char) const
+        {
+            err = std::ios_base::goodbit;
+            const std::ctype<char_type>& ct = std::use_facet<std::ctype<char_type> >(iob.getloc());
+
+            switch (fmt)
+            {
+//            case 'a':
+//            case 'A':
+//                that_.get_weekdayname(tm->tm_wday, b, e, err, ct);
+//                break;
+//            case 'b':
+//            case 'B':
+//            case 'h':
+//              that_.get_monthname(tm->tm_mon, b, e, err, ct);
+//                break;
+//            case 'c':
+//                {
+//                const string_type& fm = this->c();
+//                b = that_.get(b, e, iob, err, tm, fm.data(), fm.data() + fm.size());
+//                }
+//                break;
+            case 'd':
+            case 'e':
+              get_day(tm->tm_mday, b, e, err, ct);
+              //std::cerr << "tm_mday= "<< tm->tm_mday << std::endl;
+
+                break;
+//            case 'D':
+//                {
+//                const char_type fm[] = {'%', 'm', '/', '%', 'd', '/', '%', 'y'};
+//                b = that_.get(b, e, iob, err, tm, fm, fm + sizeof(fm)/sizeof(fm[0]));
+//                }
+//                break;
+//            case 'F':
+//                {
+//                const char_type fm[] = {'%', 'Y', '-', '%', 'm', '-', '%', 'd'};
+//                b = that_.get(b, e, iob, err, tm, fm, fm + sizeof(fm)/sizeof(fm[0]));
+//                }
+//                break;
+            case 'H':
+              get_hour(tm->tm_hour, b, e, err, ct);
+              //std::cerr << "tm_hour= "<< tm->tm_hour << std::endl;
+                break;
+//            case 'I':
+//              that_.get_12_hour(tm->tm_hour, b, e, err, ct);
+//                break;
+//            case 'j':
+//              that_.get_day_year_num(tm->tm_yday, b, e, err, ct);
+//                break;
+            case 'm':
+              get_month(tm->tm_mon, b, e, err, ct);
+              //std::cerr << "tm_mon= "<< tm->tm_mon << std::endl;
+                break;
+            case 'M':
+              get_minute(tm->tm_min, b, e, err, ct);
+              //std::cerr << "tm_min= "<< tm->tm_min << std::endl;
+                break;
+//            case 'n':
+//            case 't':
+//              that_.get_white_space(b, e, err, ct);
+//                break;
+//            case 'p':
+//              that_.get_am_pm(tm->tm_hour, b, e, err, ct);
+//                break;
+//            case 'r':
+//                {
+//                const char_type fm[] = {'%', 'I', ':', '%', 'M', ':', '%', 'S', ' ', '%', 'p'};
+//                b = that_.get(b, e, iob, err, tm, fm, fm + sizeof(fm)/sizeof(fm[0]));
+//                }
+//                break;
+//            case 'R':
+//                {
+//                const char_type fm[] = {'%', 'H', ':', '%', 'M'};
+//                b = that_.get(b, e, iob, err, tm, fm, fm + sizeof(fm)/sizeof(fm[0]));
+//                }
+//                break;
+//            case 'S':
+//              that_.get_second(tm->tm_sec, b, e, err, ct);
+//                break;
+//            case 'T':
+//                {
+//                const char_type fm[] = {'%', 'H', ':', '%', 'M', ':', '%', 'S'};
+//                b = that_.get(b, e, iob, err, tm, fm, fm + sizeof(fm)/sizeof(fm[0]));
+//                }
+//                break;
+//            case 'w':
+//              that_.get_weekday(tm->tm_wday, b, e, err, ct);
+//                break;
+//            case 'x':
+//                return that_.get_date(b, e, iob, err, tm);
+//            case 'X':
+//                {
+//                const string_type& fm = this->X();
+//                b = that_.get(b, e, iob, err, tm, fm.data(), fm.data() + fm.size());
+//                }
+//                break;
+//            case 'y':
+//              that_.get_year(tm->tm_year, b, e, err, ct);
+                break;
+            case 'Y':
+              get_year4(tm->tm_year, b, e, err, ct);
+              //std::cerr << "tm_year= "<< tm->tm_year << std::endl;
+                break;
+//            case '%':
+//              that_.get_percent(b, e, err, ct);
+//                break;
+            default:
+                err |= std::ios_base::failbit;
+            }
+            return b;
+        }
+
+
+        InputIterator get(
+          iter_type b, iter_type e,
+          std::ios_base& iob,
+          std::ios_base::iostate& err, std::tm* tm,
+          const char_type* fmtb, const char_type* fmte) const
+        {
+          const std::ctype<char_type>& ct = std::use_facet<std::ctype<char_type> >(iob.getloc());
+          err = std::ios_base::goodbit;
+          while (fmtb != fmte && err == std::ios_base::goodbit)
+          {
+              if (b == e)
+              {
+                  err = std::ios_base::failbit;
+                  break;
+              }
+              if (ct.narrow(*fmtb, 0) == '%')
+              {
+                  if (++fmtb == fmte)
+                  {
+                      err = std::ios_base::failbit;
+                      break;
+                  }
+                  char cmd = ct.narrow(*fmtb, 0);
+                  char opt = '\0';
+                  if (cmd == 'E' || cmd == '0')
+                  {
+                      if (++fmtb == fmte)
+                      {
+                          err = std::ios_base::failbit;
+                          break;
+                      }
+                      opt = cmd;
+                      cmd = ct.narrow(*fmtb, 0);
+                  }
+                  b = get(b, e, iob, err, tm, cmd, opt);
+                  ++fmtb;
+              }
+              else if (ct.is(std::ctype_base::space, *fmtb))
+              {
+                  for (++fmtb; fmtb != fmte && ct.is(std::ctype_base::space, *fmtb); ++fmtb)
+                      ;
+                  for (        ;    b != e    && ct.is(std::ctype_base::space, *b);    ++b)
+                      ;
+              }
+              else if (ct.toupper(*b) == ct.toupper(*fmtb))
+              {
+                  ++b;
+                  ++fmtb;
+              }
+              else
+                  err = std::ios_base::failbit;
+          }
+          if (b == e)
+              err |= std::ios_base::eofbit;
+          return b;
+        }
+
+      };
+
+
+      template <class CharT>
+      class time_manip: public manip<time_manip<CharT> >
       {
         std::basic_string<CharT> fmt_;
         timezone tz_;
+      public:
 
         time_manip(timezone tz, std::basic_string<CharT> fmt)
         // todo move semantics
@@ -87,80 +361,55 @@ namespace boost
           fmt_(fmt), tz_(tz)
         {
         }
+
+        /**
+         * Change the timezone and time format ios state;
+         */
+        void operator()(std::ios_base &ios) const
+        {
+          set_time_fmt<CharT> (ios, fmt_);
+          set_timezone(ios, tz_);
+        }
       };
 
-      // todo move semantics
-      template<class CharT, class Traits>
-      std::basic_ostream<CharT, Traits>&
-      operator <<(std::basic_ostream<CharT, Traits>& os, time_manip<CharT> m)
+      class time_man: public manip<time_man>
       {
-        // todo move semantics
-        os.imbue(std::locale(os.getloc(), new time_punct<CharT> (m.tz_, m.fmt_)));
-        return os;
-      }
-
-      template<class CharT, class Traits>
-      std::basic_istream<CharT, Traits>&
-      operator >>(std::basic_istream<CharT, Traits>& is, time_manip<CharT> m)
-      {
-        // todo move semantics
-        is.imbue(std::locale(is.getloc(), new time_punct<CharT> (m.tz_, m.fmt_)));
-        return is;
-      }
-
-      class time_man
-      {
-        timezone_type form_;
+        timezone tz_;
       public:
-        explicit time_man(timezone_type f) :
-          form_(f)
+
+        time_man(timezone tz)
+        // todo move semantics
+        :
+          tz_(tz)
         {
         }
-        // explicit
-        operator timezone_type() const
+
+        /**
+         * Change the timezone and time format ios state;
+         */
+        void operator()(std::ios_base &ios) const
         {
-          return form_;
+          //set_time_fmt<typename out_stream::char_type>(ios, "");
+          set_timezone(ios, tz_);
         }
       };
 
-      template<class CharT, class Traits>
-      std::basic_ostream<CharT, Traits>&
-      operator <<(std::basic_ostream<CharT, Traits>& os, time_man m)
-      {
-        os.imbue(std::locale(os.getloc(), new time_punct<CharT> (static_cast<timezone_type> (m), std::basic_string<
-            CharT>())));
-        return os;
-      }
-
-      template<class CharT, class Traits>
-      std::basic_istream<CharT, Traits>&
-      operator >>(std::basic_istream<CharT, Traits>& is, time_man m)
-      {
-        is.imbue(std::locale(is.getloc(), new time_punct<CharT> (static_cast<timezone_type> (m), std::basic_string<
-            CharT>())));
-        return is;
-      }
-
     }
 
-    template<class CharT>
-    inline
-    detail::time_manip<CharT>
-    time_fmt(timezone_type tz, const CharT* fmt)
+    template <class CharT>
+    inline detail::time_manip<CharT> time_fmt(timezone tz, const CharT* fmt)
     {
-        return detail::time_manip<CharT>(tz, fmt);
+      return detail::time_manip<CharT>(tz, fmt);
     }
 
-    template<class CharT>
-    inline
-    detail::time_manip<CharT>
-    time_fmt(timezone tz, std::basic_string<CharT> fmt)
+    template <class CharT>
+    inline detail::time_manip<CharT> time_fmt(timezone tz, std::basic_string<CharT> fmt)
     {
       // todo move semantics
       return detail::time_manip<CharT>(tz, fmt);
     }
 
-    inline detail::time_man time_fmt(timezone_type f)
+    inline detail::time_man time_fmt(timezone f)
     {
       return detail::time_man(f);
     }
@@ -170,7 +419,7 @@ namespace boost
      *
      * See Boost.IO i/o state savers for a motivating compression.
      */
-    template<typename CharT = char, typename Traits = std::char_traits<CharT> >
+    template <typename CharT = char, typename Traits = std::char_traits<CharT> >
     struct time_fmt_io_saver
     {
 
@@ -185,15 +434,8 @@ namespace boost
        * Store a reference to the i/o stream and the value of the associated @c time format .
        */
       explicit time_fmt_io_saver(state_type &s) :
-      s_save_(s)
+        s_save_(s), a_save_(get_time_fmt(s_save_))
       {
-        typedef duration_punct<CharT> Facet;
-        std::locale loc = s_save_.getloc();
-        if (!std::has_facet<Facet>(loc))
-          s_save_.imbue(std::locale(loc, new Facet()));
-
-        const Facet& f = std::use_facet<Facet>(s_save_.getloc());
-        a_save_ = f.get_duration_style();
       }
 
       /**
@@ -202,7 +444,7 @@ namespace boost
        * Stores a reference to the i/o stream and the value @c new_value to restore given as parameter.
        */
       time_fmt_io_saver(state_type &s, aspect_type new_value) :
-      s_save_(s), a_save_(new_value)
+        s_save_(s), a_save_(new_value)
       {
       }
 
@@ -221,7 +463,7 @@ namespace boost
        */
       void restore()
       {
-        s_save_ << time_fmt(a_save_);
+        set_time_fmt(a_save_, a_save_);
       }
     private:
       state_type& s_save_;
@@ -233,14 +475,13 @@ namespace boost
      *
      * See Boost.IO i/o state savers for a motivating compression.
      */
-    template<typename CharT = char, typename Traits = std::char_traits<CharT> >
     struct timezone_io_saver
     {
 
       //! the type of the state to restore
-      typedef std::basic_ostream<CharT, Traits> state_type;
+      typedef std::ios_base state_type;
       //! the type of aspect to save
-      typedef timezone_type aspect_type;
+      typedef timezone aspect_type;
 
       /**
        * Explicit construction from an i/o stream.
@@ -248,15 +489,8 @@ namespace boost
        * Store a reference to the i/o stream and the value of the associated @c timezone.
        */
       explicit timezone_io_saver(state_type &s) :
-      s_save_(s)
+        s_save_(s), a_save_(get_timezone(s_save_))
       {
-        typedef duration_punct<CharT> Facet;
-        std::locale loc = s_save_.getloc();
-        if (!std::has_facet<Facet>(loc))
-          s_save_.imbue(std::locale(loc, new Facet()));
-
-        const Facet& f = std::use_facet<Facet>(s_save_.getloc());
-        a_save_ = f.get_duration_style();
       }
 
       /**
@@ -265,7 +499,7 @@ namespace boost
        * Stores a reference to the i/o stream and the value @c new_value to restore given as parameter.
        */
       timezone_io_saver(state_type &s, aspect_type new_value) :
-      s_save_(s), a_save_(new_value)
+        s_save_(s), a_save_(new_value)
       {
       }
 
@@ -284,49 +518,132 @@ namespace boost
        */
       void restore()
       {
-        s_save_ << time_fmt(a_save_);
+        set_timezone(s_save_, a_save_);
       }
     private:
+      timezone_io_saver& operator=(timezone_io_saver const& rhs) ;
+
       state_type& s_save_;
       aspect_type a_save_;
     };
 
-    template<class CharT, class Traits, class Clock, class Duration>
+    /**
+     *
+     * @param os
+     * @param tp
+     * @Effects Behaves as a formatted output function. After constructing a @c sentry object, if the @ sentry
+     * converts to true, calls to @c facet.put(os,os,os.fill(),tp) where @c facet is the @c time_point_put<CharT>
+     * facet associated to @c os or a new created instance of the default @c time_point_put<CharT> facet.
+     * @return @c os.
+     */
+    template <class CharT, class Traits, class Clock, class Duration>
     std::basic_ostream<CharT, Traits>&
-    operator<<(std::basic_ostream<CharT, Traits>& os, const time_point<Clock,
-        Duration>& tp)
+    operator<<(std::basic_ostream<CharT, Traits>& os, const time_point<Clock, Duration>& tp)
     {
-      return os << tp.time_since_epoch() << epoch_translate(clock_string<Clock, CharT>::since());
+
+      typedef std::basic_string<CharT, Traits> string_type;
+      bool failed = false;
+      BOOST_TRY
+      {
+        std::ios_base::iostate err = std::ios_base::goodbit;
+        BOOST_TRY
+        {
+          typename std::basic_ostream<CharT, Traits>::sentry opfx(os);
+          if (bool(opfx))
+          {
+            if (!std::has_facet<time_point_put<CharT> >(os.getloc()))
+            {
+              if (time_point_put<CharT> ().put(os, os, os.fill(), tp) .failed())
+              {
+                err = std::ios_base::badbit;
+              }
+            }
+            else
+            {
+              if (std::use_facet<time_point_put<CharT> >(os.getloc()) .put(os, os, os.fill(), tp).failed())
+              {
+                err = std::ios_base::badbit;
+              }
+            }
+            os.width(0);
+          }
+        }
+        BOOST_CATCH (...)
+        {
+          bool flag = false;
+          BOOST_TRY
+          {
+            os.setstate(std::ios_base::failbit);
+          }
+          BOOST_CATCH (std::ios_base::failure )
+          {
+            flag = true;
+          }
+          BOOST_CATCH_END
+          if (flag) throw;
+        }
+        BOOST_CATCH_END
+        if (err) os.setstate(err);
+        return os;
+      }
+      BOOST_CATCH (...)
+      {
+        failed = true;
+      }
+      BOOST_CATCH_END
+      if (failed) os.setstate(std::ios_base::failbit | std::ios_base::badbit);
+      return os;
     }
 
-    template<class CharT, class Traits, class Clock, class Duration>
+    template <class CharT, class Traits, class Clock, class Duration>
     std::basic_istream<CharT, Traits>&
-    operator>>(std::basic_istream<CharT, Traits>& is, time_point<Clock,
-        Duration>& tp)
+    operator>>(std::basic_istream<CharT, Traits>& is, time_point<Clock, Duration>& tp)
     {
-      Duration d;
-      is >> d;
-      if (is.good())
+      //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+      std::ios_base::iostate err = std::ios_base::goodbit;
+
+      BOOST_TRY
       {
-        const std::basic_string<CharT> units =
-            epoch_translate(clock_string<Clock, CharT>::since());
-        std::ios_base::iostate err = std::ios_base::goodbit;
-        typedef std::istreambuf_iterator<CharT, Traits> in_iterator;
-        in_iterator i(is);
-        in_iterator e;
-        std::ptrdiff_t k =
-            chrono_detail::scan_keyword(i, e, &units, &units + 1,
-            //~ std::use_facet<std::ctype<CharT> >(is.getloc()),
-            err) - &units;
-        if (k == 1)
+        //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+        typename std::basic_istream<CharT, Traits>::sentry ipfx(is);
+        if (bool(ipfx))
         {
-          // failed to read epoch string
-          is.setstate(err);
-          return is;
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+          if (!std::has_facet<time_point_get<CharT> >(is.getloc()))
+          {
+            //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+            time_point_get<CharT> ().get(is, std::istreambuf_iterator<CharT, Traits>(), is, err, tp);
+          }
+          else
+          {
+            //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+            std::use_facet<time_point_get<CharT> >(is.getloc()).get(is, std::istreambuf_iterator<CharT, Traits>(), is,
+                err, tp);
+          }
         }
-        tp = time_point<Clock, Duration> (d);
-      } else
-        is.setstate(is.failbit);
+      }
+      BOOST_CATCH (...)
+      {
+        //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+        bool flag = false;
+        BOOST_TRY
+        {
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+          is.setstate(std::ios_base::failbit);
+        }
+        BOOST_CATCH (std::ios_base::failure )
+        {
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+          flag = true;
+        }
+        BOOST_CATCH_END
+        //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+        if (flag) throw;
+        //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+      }
+      BOOST_CATCH_END
+      if (err) is.setstate(err);
+      //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
       return is;
     }
 
@@ -334,7 +651,7 @@ namespace boost
 
     namespace detail
     {
-#if defined BOOST_WINDOWS && ! defined(__CYGWIN__)
+#if BOOST_CHRONO_INTERNAL_TIMEGM
     int is_leap(int year)
     {
       if(year % 400 == 0)
@@ -393,110 +710,145 @@ namespace boost
 #endif
     } // detail
 
-    template<class CharT, class Traits, class Duration>
+#if defined BOOST_CHRONO_PROVIDES_DATE_IO_FOR_SYSTEM_CLOCK_TIME_POINT
+
+    template <class CharT, class Traits, class Duration>
     std::basic_ostream<CharT, Traits>&
-    operator<<(std::basic_ostream<CharT, Traits>& os, const time_point<
-        system_clock, Duration>& tp)
+    operator<<(std::basic_ostream<CharT, Traits>& os, const time_point<system_clock, Duration>& tp)
     {
+      //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
       typename std::basic_ostream<CharT, Traits>::sentry ok(os);
-      if (ok)
+      if (bool(ok))
       {
+        //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
         bool failed = false;
-        try
+        BOOST_TRY
         {
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
           const CharT* pb = 0; //nullptr;
           const CharT* pe = pb;
-          timezone_type tz = timezone::utc;
-          typedef time_punct<CharT> F;
+          std::basic_string<CharT> fmt = get_time_fmt<CharT> (os);
+          pb = fmt.data();
+          pe = pb + fmt.size();
+
+          timezone tz = get_timezone(os);
           std::locale loc = os.getloc();
-          if (std::has_facet<F>(loc))
-          {
-            const F& f = std::use_facet<F>(loc);
-            pb = f.fmt().data();
-            pe = pb + f.fmt().size();
-            tz = f.get_timezone();
-          }
-          time_t t = system_clock::to_time_t(tp);
-          tm tm;
+          time_t t = system_clock::to_time_t(time_point_cast<system_clock::duration>(tp));
+          std::tm tm;
           if (tz == timezone::local)
           {
+            //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
 #if defined BOOST_WINDOWS && ! defined(__CYGWIN__)
             std::tm *tmp = 0;
             if ((tmp=localtime(&t)) == 0)
             failed = true;
             tm =*tmp;
 #else
-            if (localtime_r(&t, &tm) == 0)
-              failed = true;
+            if (localtime_r(&t, &tm) == 0) failed = true;
 #endif
-          } else
+          }
+          else
           {
+            //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
 #if defined BOOST_WINDOWS && ! defined(__CYGWIN__)
             std::tm *tmp = 0;
             if((tmp = gmtime(&t)) == 0)
-              failed = true;
+            failed = true;
             tm = *tmp;
 #else
-            if (gmtime_r(&t, &tm) == 0)
-              failed = true;
+            if (gmtime_r(&t, &tm) == 0) failed = true;
 #endif
 
           }
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
           if (!failed)
           {
-            const std::time_put<CharT>& tpf = std::use_facet<std::time_put<
-                CharT> >(loc);
+            //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+            const std::time_put<CharT>& tpf = std::use_facet<std::time_put<CharT> >(loc);
             if (pb == pe)
             {
-              CharT
-                  pattern[] =
-                      { '%', 'Y', '-', '%', 'm', ' ', '%', 'd', ' ', '%', 'H', ':', '%', 'M', ':' };
+              //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+              CharT pattern[] =
+              { '%', 'Y', '-', '%', 'm', '-', '%', 'd', ' ', '%', 'H', ':', '%', 'M', ':' };
               pb = pattern;
-              pe = pb + sizeof(pattern) / sizeof(CharT);
+              pe = pb + sizeof (pattern) / sizeof(CharT);
               failed = tpf.put(os, os, os.fill(), &tm, pb, pe).failed();
               if (!failed)
               {
-                duration<double> d = tp - system_clock::from_time_t(t)
-                    + seconds(tm.tm_sec);
-                if (d.count() < 10)
-                  os << CharT('0');
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+                duration<double> d = tp - system_clock::from_time_t(t) + seconds(tm.tm_sec);
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+                if (d.count() < 10) os << CharT('0');
+                //if (! os.good()) {
+                  //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+                //  throw "exception";
+                //}
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
                 std::ios::fmtflags flgs = os.flags();
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
                 os.setf(std::ios::fixed, std::ios::floatfield);
+                //if (! os.good()) {
+                  //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+                //throw "exception";
+                //}
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< " " << d.count()  << std::endl;
                 os << d.count();
+                //if (! os.good()) {
+                  //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+                //throw "exception";
+                //}
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< " " << d.count() << std::endl;
                 os.flags(flgs);
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
                 if (tz == timezone::local)
                 {
+                  //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
                   CharT sub_pattern[] =
                   { ' ', '%', 'z' };
                   pb = sub_pattern;
-                  pe = pb + +sizeof(sub_pattern) / sizeof(CharT);
+                  pe = pb + +sizeof (sub_pattern) / sizeof(CharT);
                   failed = tpf.put(os, os, os.fill(), &tm, pb, pe).failed();
-                } else
+                }
+                else
                 {
+                  //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
                   CharT sub_pattern[] =
                   { ' ', '+', '0', '0', '0', '0', 0 };
                   os << sub_pattern;
                 }
+                //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
               }
-            } else
+              //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
+            }
+            else
+            {
+              //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
               failed = tpf.put(os, os, os.fill(), &tm, pb, pe).failed();
+            }
           }
-        } catch (...)
+        }
+        BOOST_CATCH (...)
         {
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
           failed = true;
         }
+        BOOST_CATCH_END
         if (failed)
+        {
+          //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
           os.setstate(std::ios_base::failbit | std::ios_base::badbit);
+        }
       }
+      //std::cerr << __FILE__ << "[" << __LINE__ << "]"<< std::endl;
       return os;
     }
+#endif
 
     namespace detail
     {
 
-      template<class CharT, class InputIterator>
-      minutes extract_z(InputIterator& b, InputIterator e, std::ios_base::iostate& err, const std::ctype<
-          CharT>& ct)
+      template <class CharT, class InputIterator>
+      minutes extract_z(InputIterator& b, InputIterator e, std::ios_base::iostate& err, const std::ctype<CharT>& ct)
       {
         int min = 0;
         if (b != e)
@@ -517,7 +869,7 @@ namespace boost
               return minutes(0);
             }
             cn = ct.narrow(*b, 0);
-            if (!('0' <= cn && cn <= '9'))
+            if (! ('0' <= cn && cn <= '9'))
             {
               err |= std::ios_base::failbit;
               return minutes(0);
@@ -532,63 +884,65 @@ namespace boost
               return minutes(0);
             }
             cn = ct.narrow(*b, 0);
-            if (!('0' <= cn && cn <= '9'))
+            if (! ('0' <= cn && cn <= '9'))
             {
               err |= std::ios_base::failbit;
               return minutes(0);
             }
             min = min * 10 + cn - '0';
           }
-          if (++b == e)
+          if (++b == e) {
             err |= std::ios_base::eofbit;
+          }
           min += hr * 60;
           min *= sn;
-        } else
+        }
+        else
+        {
           err |= std::ios_base::eofbit | std::ios_base::failbit;
+        }
         return minutes(min);
       }
 
     } // detail
 
-    template<class CharT, class Traits, class Duration>
+#if defined BOOST_CHRONO_PROVIDES_DATE_IO_FOR_SYSTEM_CLOCK_TIME_POINT
+
+    template <class CharT, class Traits, class Duration>
     std::basic_istream<CharT, Traits>&
-    operator>>(std::basic_istream<CharT, Traits>& is, time_point<
-        system_clock, Duration>& tp)
+    operator>>(std::basic_istream<CharT, Traits>& is, time_point<system_clock, Duration>& tp)
     {
       typename std::basic_istream<CharT, Traits>::sentry ok(is);
-      if (ok)
+      if (bool(ok))
       {
         std::ios_base::iostate err = std::ios_base::goodbit;
-        try
+        BOOST_TRY
         {
-          const CharT* pb = 0;//nullptr;
+          const CharT* pb = 0; //nullptr;
           const CharT* pe = pb;
-          typedef time_punct<CharT> F;
+          std::basic_string<CharT> fmt = get_time_fmt<CharT> (is);
+          pb = fmt.data();
+          pe = pb + fmt.size();
+
+          timezone tz = get_timezone(is);
           std::locale loc = is.getloc();
-          timezone_type tz = timezone::utc;
-          if (std::has_facet<F>(loc))
-          {
-            const F& f = std::use_facet<F>(loc);
-            pb = f.fmt().data();
-            pe = pb + f.fmt().size();
-            tz = f.timezone_type();
-          }
-          const std::time_get<CharT>& tg = std::use_facet<
-              std::time_get<CharT> >(loc);
-          const std::ctype<CharT>& ct =
-              std::use_facet<std::ctype<CharT> >(loc);
+          const std::time_get<CharT>& tg = std::use_facet<std::time_get<CharT> >(loc);
+          const std::ctype<CharT>& ct = std::use_facet<std::ctype<CharT> >(loc);
           tm tm; // {0}
           typedef std::istreambuf_iterator<CharT, Traits> It;
           if (pb == pe)
           {
-            CharT
-                pattern[] =
-                    { '%', 'Y', '-', '%', 'm', '-', '%', 'd', ' ', '%', 'H', ':', '%', 'M', ':' };
+            CharT pattern[] =
+            { '%', 'Y', '-', '%', 'm', '-', '%', 'd', ' ', '%', 'H', ':', '%', 'M', ':' };
             pb = pattern;
-            pe = pb + sizeof(pattern) / sizeof(CharT);
+            pe = pb + sizeof (pattern) / sizeof(CharT);
+#if defined BOOST_CHRONO_USES_INTERNAL_TIME_GET
+            const detail::time_get<CharT>& dtg(tg);
+            dtg.get(is, 0, is, err, &tm, pb, pe);
+#else
             tg.get(is, 0, is, err, &tm, pb, pe);
-            if (err & std::ios_base::failbit)
-              goto exit;
+#endif
+            if (err & std::ios_base::failbit) goto exit;
             double sec;
             CharT c = CharT();
             is >> sec;
@@ -597,6 +951,7 @@ namespace boost
               err |= std::ios_base::failbit;
               goto exit;
             }
+            //std::cerr << "sec= "<< sec << std::endl;
             It i(is);
             It eof;
             c = *i;
@@ -606,22 +961,30 @@ namespace boost
               goto exit;
             }
             minutes min = detail::extract_z(i, eof, err, ct);
-            if (err & std::ios_base::failbit)
-              goto exit;
+            //std::cerr << "min= "<< min.count() << std::endl;
+
+            if (err & std::ios_base::failbit) goto exit;
             time_t t;
-#if defined BOOST_WINDOWS && ! defined(__CYGWIN__)
+#if BOOST_CHRONO_INTERNAL_TIMEGM
             t = detail::internal_timegm(&tm);
 #else
             t = timegm(&tm);
 #endif
-            tp = system_clock::from_time_t(t) - min
-                + round<microseconds> (duration<double> (sec));
-          } else
+            tp = time_point_cast<Duration>(
+                system_clock::from_time_t(t) - min + round<microseconds> (duration<double> (sec))
+                );
+          }
+          else
           {
             const CharT z[2] =
             { '%', 'z' };
             const CharT* fz = std::search(pb, pe, z, z + 2);
+#if defined BOOST_CHRONO_USES_INTERNAL_TIME_GET
+            const detail::time_get<CharT>& dtg(tg);
+            dtg.get(is, 0, is, err, &tm, pb, fz);
+#else
             tg.get(is, 0, is, err, &tm, pb, fz);
+#endif
             minutes minu(0);
             if (fz != pe)
             {
@@ -632,9 +995,8 @@ namespace boost
               }
               It i(is);
               It eof;
-              minu = extract_z(i, eof, err, ct);
-              if (err & std::ios_base::failbit)
-                goto exit;
+              minu = detail::extract_z(i, eof, err, ct);
+              if (err & std::ios_base::failbit) goto exit;
               if (fz + 2 != pe)
               {
                 if (err != std::ios_base::goodbit)
@@ -642,34 +1004,48 @@ namespace boost
                   err |= std::ios_base::failbit;
                   goto exit;
                 }
+#if defined BOOST_CHRONO_USES_INTERNAL_TIME_GET
+                const detail::time_get<CharT>& dtg(tg);
+                dtg.get(is, 0, is, err, &tm, fz + 2, pe);
+#else
                 tg.get(is, 0, is, err, &tm, fz + 2, pe);
-                if (err & std::ios_base::failbit)
-                  goto exit;
+#endif
+                if (err & std::ios_base::failbit) goto exit;
               }
             }
             tm.tm_isdst = -1;
             time_t t;
             if (tz == timezone::utc || fz != pe)
-#if defined BOOST_WINDOWS && ! defined(__CYGWIN__)
+            {
+#if BOOST_CHRONO_INTERNAL_TIMEGM
               t = detail::internal_timegm(&tm);
 #else
               t = timegm(&tm);
 #endif
+            }
             else
+            {
               t = mktime(&tm);
-            tp = system_clock::from_time_t(t) - minu;
+            }
+            tp = time_point_cast<Duration>(
+                system_clock::from_time_t(t) - minu
+                );
           }
-        } catch (...)
+        }
+        BOOST_CATCH (...)
         {
           err |= std::ios_base::badbit | std::ios_base::failbit;
         }
+        BOOST_CATCH_END
         exit: is.setstate(err);
       }
       return is;
     }
+
+#endif
 #endif //UTC
   } // chrono
 
 }
 
-#endif  // BOOST_CHRONO_CHRONO_IO_HPP
+#endif  // header

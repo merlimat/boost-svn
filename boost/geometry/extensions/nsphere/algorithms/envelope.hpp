@@ -1,8 +1,8 @@
 // Boost.Geometry (aka GGL, Generic Geometry Library)
 
-// Copyright (c) 2007-2011 Barend Gehrels, Amsterdam, the Netherlands.
-// Copyright (c) 2008-2011 Bruno Lalande, Paris, France.
-// Copyright (c) 2009-2011 Mateusz Loskot, London, UK.
+// Copyright (c) 2007-2012 Barend Gehrels, Amsterdam, the Netherlands.
+// Copyright (c) 2008-2012 Bruno Lalande, Paris, France.
+// Copyright (c) 2009-2012 Mateusz Loskot, London, UK.
 
 // Parts of Boost.Geometry are redesigned from Geodan's Geographic Library
 // (geolib/GGL), copyright (c) 1995-2010 Geodan, Amsterdam, the Netherlands.
@@ -17,6 +17,7 @@
 
 #include <boost/geometry/algorithms/envelope.hpp>
 
+#include <boost/geometry/extensions/nsphere/core/radius.hpp>
 #include <boost/geometry/extensions/nsphere/core/tags.hpp>
 
 
@@ -24,12 +25,13 @@ namespace boost { namespace geometry
 {
 
 #ifndef DOXYGEN_NO_DETAIL
-namespace detail { namespace envelope {
+namespace detail { namespace envelope
+{
 
 /// Calculate envelope of an n-sphere, circle or sphere (currently only for Cartesian 2D points)
-template<typename Box, typename Nsphere, typename Strategy>
 struct envelope_nsphere
 {
+    template <typename Nsphere, typename Box, typename Strategy>
     static inline void apply(Nsphere const& nsphere, Box& mbr, Strategy const&)
     {
         assert_dimension<Nsphere, 2>();
@@ -52,23 +54,9 @@ namespace dispatch
 {
 
 
-template
-<
-    typename Nsphere,
-    typename Box,
-    typename StrategyLess, typename StrategyGreater
->
-struct envelope
-    <
-        nsphere_tag, box_tag,
-        Nsphere, Box,
-        StrategyLess, StrategyGreater
-    >
+template <typename Nsphere>
+struct envelope<Nsphere, nsphere_tag>
     : detail::envelope::envelope_nsphere
-        <
-            Nsphere, Box,
-            StrategyLess
-        >
 {};
 
 

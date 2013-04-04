@@ -1,4 +1,4 @@
-//  inspect program  ---------------------------------------------------------//
+//  inspect program  -------------------------------------------------------------------//
 
 //  Copyright Beman Dawes 2002.
 //  Copyright Rene Rivera 2004-2006.
@@ -15,6 +15,11 @@
 
 //  See http://www.boost.org/tools/inspect/ for more information.
 
+const char* boost_no_inspect = "boost-" "no-inspect";
+
+//  Directories with a file name of the boost_no_inspect value are not inspected.
+//  Files that contain the boost_no_inspect value are not inspected.
+
 
 #include <vector>
 #include <list>
@@ -25,6 +30,15 @@
 #include "boost/lexical_cast.hpp"
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/fstream.hpp"
+
+#include <stdio.h>  // for popen, pclose
+#if defined(_MSC_VER)
+# define POPEN _popen
+# define PCLOSE _pclose
+#else
+# define POPEN popen
+# define PCLOSE pclose
+#endif
 
 #include "time_string.hpp"
 
@@ -41,6 +55,7 @@
 #include "ascii_check.hpp"
 #include "apple_macro_check.hpp"
 #include "assert_macro_check.hpp"
+#include "deprecated_macro_check.hpp"
 #include "minmax_check.hpp"
 #include "unnamed_namespace_check.hpp"
 
@@ -109,33 +124,82 @@ namespace
   typedef std::vector< lib_error_count > lib_error_count_vector;
   lib_error_count_vector libs;
 
-//  get info (as a string) if inspect_root is svn working copy  --------------//
+//  run subversion to get revisions info  ------------------------------------//
+//
+// implemented as function object that can be passed to boost::execution_monitor
+// in order to swallow any errors from 'svn info'.
 
-  void extract_info( fs::ifstream & entries_file, string & rev, string & repos )
-    {
-      std::getline( entries_file, rev );
-      std::getline( entries_file, rev );
-      std::getline( entries_file, rev );
-      std::getline( entries_file, rev );    // revision number as a string
-      std::getline( entries_file, repos );  // repository as a string
+  struct svn_check
+  {
+    explicit svn_check(const fs::path & inspect_root) :
+      inspect_root(inspect_root), fp(0) {}
+
+    int operator()() {
+      string rev("unknown");
+      string repos("unknown");
+      string command("cd ");
+      command += inspect_root.string() + " && svn info";
+
+      fp = (POPEN(command.c_str(), "r"));
+      if (fp)
+      {
+        static const int line_max = 128;
+        char line[line_max];
+        while (fgets(line, line_max, fp) != NULL)
+        {
+          string ln(line);
+          string::size_type pos;
+          if ((pos = ln.find("Revision: ")) != string::npos)
+            rev = ln.substr(pos + 10);
+          else if ((pos = ln.find("URL: ")) != string::npos)
+            repos = ln.substr(pos + 5);
+        }
+      }
+
+      result = repos + " at revision " + rev;
+      return 0;
     }
+
+    ~svn_check() { if (fp) PCLOSE(fp); }
+
+    const fs::path & inspect_root;
+    std::string result;
+    FILE* fp;
+  private:
+    svn_check(svn_check const&);
+    svn_check const& operator=(svn_check const&);
+  };
+
+  // Small helper class because svn_check can't be passed by copy.
+  template <typename F, typename R>
+  struct nullary_function_ref
+  {
+    explicit nullary_function_ref(F& f) : f(f) {}
+    R operator()() const { return f(); }
+    F& f;
+  };
+
+//  get info (as a string) if inspect_root is svn working copy  --------------//
 
   string info( const fs::path & inspect_root )
   {
-    string rev( "?" );
-    string repos( "unknown" );
-    fs::path entries( inspect_root / ".svn" / "entries" );
-    fs::ifstream entries_file( entries );
-    if ( entries_file )
-      extract_info( entries_file, rev, repos );
-    else
-    {
-      entries = inspect_root / ".." / "svn_info" / ".svn" / "entries";
-      fs::ifstream entries_file( entries );
-      if ( entries_file )
-        extract_info( entries_file, rev, repos );
+    try {
+      boost::execution_monitor e;
+      svn_check check(inspect_root);
+
+      e.execute(nullary_function_ref<svn_check, int>(check));
+      return check.result;
     }
-    return repos + " at revision " + rev;
+    catch(boost::execution_exception const& e) {
+      if (e.code() == boost::execution_exception::system_error) {
+        // There was an error running 'svn info' - it probably
+        // wasn't run in a subversion repo.
+        return string("unknown");
+      }
+      else {
+        throw;
+      }
+    }
   }
 
 //  visit_predicate (determines which directories are visited)  --------------//
@@ -165,7 +229,7 @@ namespace
       // ignore OS X directory info files:
       && leaf != ".DS_Store"
       // ignore if tag file present
-      && !boost::filesystem::exists(pth / "boost-no-inspect")
+      && !boost::filesystem::exists(pth / boost_no_inspect)
       ;
   }
 
@@ -268,9 +332,9 @@ namespace
         ++file_count;
         string content;
         load_content( *itr, content );
-        check( lib.empty()
-                ? library_from_content( content ) : lib
-               , *itr, content, insps );
+        if (content.find(boost_no_inspect) == string::npos)
+          check( lib.empty() ? library_from_content( content ) : lib,
+                 *itr, content, insps );
       }
     }
   }
@@ -376,8 +440,6 @@ namespace
 
   void display_details()
   {
-    // gps - review this
-
     if (display_text == display_format)
     {
       // display error messages with group indication
@@ -573,6 +635,7 @@ namespace
          "  -ascii\n"
          "  -apple_macro\n"
          "  -assert_macro\n"
+         "  -deprecated_macro\n"
          "  -minmax\n"
          "  -unnamed\n"
          " default is all checks on; otherwise options specify desired checks"
@@ -743,8 +806,9 @@ int cpp_main( int argc_param, char * argv_param[] )
   bool path_name_ck = true;
   bool tab_ck = true;
   bool ascii_ck = true;
-  bool apple_ok = true;
-  bool assert_ok = true;
+  bool apple_ck = true;
+  bool assert_ck = true;
+  bool deprecated_ck = true;
   bool minmax_ck = true;
   bool unnamed_ck = true;
   bool cvs = false;
@@ -777,8 +841,9 @@ int cpp_main( int argc_param, char * argv_param[] )
     path_name_ck = false;
     tab_ck = false;
     ascii_ck = false;
-    apple_ok = false;
-    assert_ok = false;
+    apple_ck = false;
+    assert_ck = false;
+    deprecated_ck = false;
     minmax_ck = false;
     unnamed_ck = false;
   }
@@ -803,9 +868,11 @@ int cpp_main( int argc_param, char * argv_param[] )
     else if ( std::strcmp( argv[1], "-ascii" ) == 0 )
       ascii_ck = true;
     else if ( std::strcmp( argv[1], "-apple_macro" ) == 0 )
-      apple_ok = true;
+      apple_ck = true;
     else if ( std::strcmp( argv[1], "-assert_macro" ) == 0 )
-      assert_ok = true;
+      assert_ck = true;
+    else if ( std::strcmp( argv[1], "-deprecated_macro" ) == 0 )
+      deprecated_ck = true;
     else if ( std::strcmp( argv[1], "-minmax" ) == 0 )
         minmax_ck = true;
     else if ( std::strcmp( argv[1], "-unnamed" ) == 0 )
@@ -849,10 +916,12 @@ int cpp_main( int argc_param, char * argv_param[] )
       inspectors.push_back( inspector_element( new boost::inspect::tab_check ) );
   if ( ascii_ck )
       inspectors.push_back( inspector_element( new boost::inspect::ascii_check ) );
-  if ( apple_ok )
+  if ( apple_ck )
       inspectors.push_back( inspector_element( new boost::inspect::apple_macro_check ) );
-  if ( assert_ok )
+  if ( assert_ck )
       inspectors.push_back( inspector_element( new boost::inspect::assert_macro_check ) );
+  if ( deprecated_ck )
+      inspectors.push_back( inspector_element( new boost::inspect::deprecated_macro_check ) );
   if ( minmax_ck )
       inspectors.push_back( inspector_element( new boost::inspect::minmax_check ) );
   if ( unnamed_ck )
@@ -977,10 +1046,14 @@ int cpp_main( int argc_param, char * argv_param[] )
     if (display_text == display_format)
     {
       std::cout << "Details:\n" << inspector_keys;
-    }
+      std::cout << "\nDirectories with a file named \"" << boost_no_inspect << "\" will not be inspected.\n"
+                   "Files containing \"" << boost_no_inspect << "\" will not be inspected.\n";
+   }
     else
     {
       std::cout << "<h2>Details</h2>\n" << inspector_keys;
+      std::cout << "\n<p>Directories with a file named \"" << boost_no_inspect << "\" will not be inspected.<br>\n"
+                   "Files containing \"" << boost_no_inspect << "\" will not be inspected.</p>\n";
     }
     display_details();
   }

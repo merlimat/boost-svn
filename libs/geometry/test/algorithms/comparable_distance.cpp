@@ -1,9 +1,9 @@
 // Boost.Geometry (aka GGL, Generic Geometry Library)
 // Unit Test
 
-// Copyright (c) 2007-2011 Barend Gehrels, Amsterdam, the Netherlands.
-// Copyright (c) 2008-2011 Bruno Lalande, Paris, France.
-// Copyright (c) 2009-2011 Mateusz Loskot, London, UK.
+// Copyright (c) 2007-2012 Barend Gehrels, Amsterdam, the Netherlands.
+// Copyright (c) 2008-2012 Bruno Lalande, Paris, France.
+// Copyright (c) 2009-2012 Mateusz Loskot, London, UK.
 
 // Parts of Boost.Geometry are redesigned from Geodan's Geographic Library
 // (geolib/GGL), copyright (c) 1995-2010 Geodan, Amsterdam, the Netherlands.
@@ -102,11 +102,11 @@ void test_distance_linestring()
     P p = bg::make<P>(2, 1);
 
     typename bg::coordinate_type<P>::type d = bg::comparable_distance(p, points);
-    BOOST_CHECK_CLOSE(d, 0.70710678, 0.001);
+    BOOST_CHECK_CLOSE(d, 0.5, 0.001);
 
     p = bg::make<P>(5, 5);
     d = bg::comparable_distance(p, points);
-    BOOST_CHECK_CLOSE(d, 2.828427, 0.001);
+    BOOST_CHECK_CLOSE(d, 8.0, 0.001);
 
 
     bg::model::linestring<P> line;
@@ -117,11 +117,11 @@ void test_distance_linestring()
     p = bg::make<P>(5, 5);
 
     d = bg::comparable_distance(p, line);
-    BOOST_CHECK_CLOSE(d, 2.828427, 0.001);
+    BOOST_CHECK_CLOSE(d, 8.0, 0.001);
 
     // Reverse case
     d = bg::comparable_distance(line, p);
-    BOOST_CHECK_CLOSE(d, 2.828427, 0.001);
+    BOOST_CHECK_CLOSE(d, 8.0, 0.001);
 }
 
 template <typename P>

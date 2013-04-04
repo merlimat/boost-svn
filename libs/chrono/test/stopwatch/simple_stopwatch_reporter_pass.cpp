@@ -1,20 +1,13 @@
-//===----------------------------------------------------------------------===//
-//
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
-//
-//===----------------------------------------------------------------------===//
-//  Adaptation to Boost of the libcxx
-//  Copyright 2010 Vicente J. Botet Escriba
+//  Copyright 2010-2011 Vicente J. Botet Escriba
 //  Distributed under the Boost Software License, Version 1.0.
 //  See http://www.boost.org/LICENSE_1_0.txt
 
+#define BOOST_CHRONO_VERSION 2
+
 #include <iostream>
 #include <boost/type_traits/is_same.hpp>
-#include <boost/chrono/stopwatches/simple_stopwatch.hpp>
-#include <libs/chrono/test/cycle_count.hpp>
+#include <boost/chrono/stopwatches/strict_stopwatch.hpp>
+#include "../cycle_count.hpp"
 #include <boost/chrono/stopwatches/reporters/stopwatch_reporter.hpp>
 #include <boost/chrono/stopwatches/reporters/system_default_formatter.hpp>
 
@@ -22,7 +15,7 @@
 #include <boost/system/system_error.hpp>
 #include <boost/detail/lightweight_test.hpp>
 
-#if !defined(BOOST_NO_STATIC_ASSERT)
+#if !defined(BOOST_NO_CXX11_STATIC_ASSERT)
 #define NOTHING ""
 #endif
 
@@ -37,7 +30,7 @@ void check_invariants()
     BOOST_CHRONO_STATIC_ASSERT((boost::is_same<typename Stopwatch::period, typename Stopwatch::clock::duration::period>::value), NOTHING, ());
     BOOST_CHRONO_STATIC_ASSERT((boost::is_same<typename Stopwatch::duration, typename Stopwatch::clock::time_point::duration>::value), NOTHING, ());
     BOOST_CHRONO_STATIC_ASSERT(Stopwatch::is_steady == Stopwatch::clock::is_steady, NOTHING, ());
-    BOOST_CHRONO_STATIC_ASSERT((boost::is_same<typename Stopwatch::stopwatch, simple_stopwatch<typename Stopwatch::clock> >::value), NOTHING, ());
+    BOOST_CHRONO_STATIC_ASSERT((boost::is_same<typename Stopwatch::stopwatch_type, strict_stopwatch<typename Stopwatch::clock> >::value), NOTHING, ());
 }
 
 template <typename Reporter>
@@ -117,8 +110,8 @@ void check_report()
 template <typename Clock>
 void check_all(bool check=true)
 {
-  typedef stopwatch_reporter<simple_stopwatch<Clock> > Reporter;
-  typedef stopwatch_reporter<simple_stopwatch<Clock>, elapsed_formatter > ReporterE;
+  typedef stopwatch_reporter<strict_stopwatch<Clock> > Reporter;
+  typedef stopwatch_reporter<strict_stopwatch<Clock>, elapsed_formatter > ReporterE;
 
   check_invariants<Reporter>();
   check_default_constructor<Reporter>();
@@ -133,8 +126,8 @@ void check_all(bool check=true)
 
 int main()
 {
-  typedef simple_stopwatch<high_resolution_clock > Stopwatch;
-  typedef stopwatch_reporter_default_formatter<Stopwatch>::type Formatter;
+  typedef strict_stopwatch<high_resolution_clock > Stopwatch;
+  typedef basic_stopwatch_reporter_default_formatter<char, Stopwatch>::type Formatter;
   typedef stopwatch_reporter<Stopwatch> Reporter;
   static Formatter fmtr;
 
@@ -157,7 +150,7 @@ int main()
   std::cout << "thread_clock=\n";
   check_all<thread_clock>(false);
 #endif
-    
+
 #if defined(BOOST_CHRONO_HAS_PROCESS_CLOCKS)
   std::cout << "process_real_cpu_clock=\n";
   check_all<process_real_cpu_clock>(false);

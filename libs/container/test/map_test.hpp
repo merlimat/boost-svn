@@ -19,6 +19,8 @@
 #include "print_container.hpp"
 #include <boost/container/detail/utilities.hpp>
 #include <boost/container/detail/pair.hpp>
+#include <boost/move/iterator.hpp>
+#include <boost/move/utility.hpp>
 #include <string>
 
 template<class T1, class T2, class T3, class T4>
@@ -38,7 +40,7 @@ template<class MyBoostMap
 int map_test ()
 {
    typedef typename MyBoostMap::key_type    IntType;
-   typedef containers_detail::pair<IntType, IntType>         IntPairType;
+   typedef container_detail::pair<IntType, IntType>         IntPairType;
    typedef typename MyStdMap::value_type  StdPairType;
    const int max = 100;
 
@@ -48,7 +50,7 @@ int map_test ()
       MyBoostMultiMap *boostmultimap = new MyBoostMultiMap;
       MyStdMultiMap *stdmultimap = new MyStdMultiMap;
 
-      //Test construction from a range   
+      //Test construction from a range  
       {
          //This is really nasty, but we have no other simple choice
          IntPairType aux_vect[50];
@@ -101,8 +103,10 @@ int map_test ()
             IntType i2(i);
             new(&aux_vect3[i])IntPairType(boost::move(i1), boost::move(i2));
          }
-/*
-         MyBoostMap *boostmap3 = new MyBoostMap 
+         if(!CheckEqualContainers(boostmap2, stdmap2)) return 1;
+         if(!CheckEqualContainers(boostmultimap2, stdmultimap2)) return 1;
+
+         MyBoostMap *boostmap3 = new MyBoostMap
                ( ordered_unique_range
                , boost::make_move_iterator(&aux_vect[0])
                , boost::make_move_iterator(aux_vect + 50));
@@ -121,15 +125,34 @@ int map_test ()
             std::cout << "Error in construct<MyBoostMultiMap>(MyBoostMultiMap3)" << std::endl;
             return 1;
          }
-*/
+
+         {
+            IntType i0(0);
+            boostmap2->erase(i0);
+            boostmultimap2->erase(i0);
+            stdmap2->erase(0);
+            stdmultimap2->erase(0);
+         }
+         {
+            IntType i0(0);
+            IntType i1(1);
+            (*boostmap2)[::boost::move(i0)] = ::boost::move(i1);
+         }
+         {
+            IntType i1(1);
+            (*boostmap2)[IntType(0)] = ::boost::move(i1);
+         }
+         (*stdmap2)[0] = 1;
+         if(!CheckEqualContainers(boostmap2, stdmap2)) return 1;
+
          delete boostmap2;
          delete boostmultimap2;
          delete stdmap2;
          delete stdmultimap2;
-         //delete boostmap3;
-         //delete boostmultimap3;
-         //delete stdmap3;
-         //delete stdmultimap3;
+         delete boostmap3;
+         delete boostmultimap3;
+         delete stdmap3;
+         delete stdmultimap3;
       }
       {
          //This is really nasty, but we have no other simple choice
@@ -158,6 +181,7 @@ int map_test ()
 
          typename MyBoostMap::iterator it;
          typename MyBoostMap::const_iterator cit = it;
+         (void)cit;
 
          boostmap->erase(boostmap->begin()++);
          stdmap->erase(stdmap->begin()++);
@@ -366,10 +390,17 @@ int map_test ()
                return 1;
             if(!CheckEqualPairContainers(boostmultimap, stdmultimap))
                return 1;
-            {
-               IntType i1(i);
-               IntType i2(i);
-               new(&intpair)IntPairType(boost::move(i1), boost::move(i2));
+            {  //Check equal_range
+               std::pair<typename MyBoostMultiMap::iterator, typename MyBoostMultiMap::iterator> bret =
+                  boostmultimap->equal_range(boostmultimap->begin()->first);
+
+               std::pair<typename MyStdMultiMap::iterator, typename MyStdMultiMap::iterator>   sret =
+                  stdmultimap->equal_range(stdmultimap->begin()->first);
+        
+               if( std::distance(bret.first, bret.second) !=
+                   std::distance(sret.first, sret.second) ){
+                  return 1;
+               }
             }
             {
                IntType i1(i);
@@ -449,7 +480,7 @@ template<class MyBoostMap
 int map_test_copyable ()
 {
    typedef typename MyBoostMap::key_type    IntType;
-   typedef containers_detail::pair<IntType, IntType>         IntPairType;
+   typedef container_detail::pair<IntType, IntType>         IntPairType;
    typedef typename MyStdMap::value_type  StdPairType;
 
    const int max = 100;
@@ -495,7 +526,7 @@ int map_test_copyable ()
          stdmapcopy  = *stdmap;
          boostmmapcopy = *boostmultimap;
          stdmmapcopy = *stdmultimap;
-         
+        
          if(!CheckEqualContainers(&boostmapcopy, &stdmapcopy))
             return 1;
          if(!CheckEqualContainers(&boostmmapcopy, &stdmmapcopy))

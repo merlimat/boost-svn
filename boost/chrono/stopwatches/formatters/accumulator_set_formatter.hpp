@@ -1,4 +1,4 @@
-//  boost/chrono/stopwatches/stopwatch_formatter.hpp  ------------------------------------------------------------//
+//  boost/chrono/stopwatches/formatters/ accumulator_set_formatter.hpp  ------------------------------------------------------------//
 //  Copyright 2011 Vicente J. Botet Escriba
 //  Distributed under the Boost Software License, Version 1.0.
 //  See http://www.boost.org/LICENSE_1_0.txt
@@ -8,9 +8,8 @@
 #define BOOST_CHRONO_STOPWATCHES_FORMATTERS_ACCUMULATOR_SET_HPP
 
 #include <boost/chrono/stopwatches/formatters/base_formatter.hpp>
-#include <boost/system/error_code.hpp>
+#include <boost/chrono/chrono_io.hpp>
 #include <boost/current_function.hpp>
-//#include <boost/chrono/stopwatches/detail/adaptive_string.hpp>
 #include <boost/accumulators/framework/accumulator_set.hpp>
 #include <boost/accumulators/statistics/count.hpp>
 #include <boost/accumulators/statistics/sum.hpp>
@@ -90,6 +89,7 @@ namespace boost
 
         typedef typename Stopwatch::duration duration_t;
 
+        duration_style_io_saver dsios(this->os_);
         this->os_
             << static_cast<format_type&> (*this)
                 % boost::accumulators::count(acc)
